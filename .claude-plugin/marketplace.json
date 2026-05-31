@@ -1,0 +1,9 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "snowman95-marketplace",
+  "description": "Personal Claude Code marketplace for skills and plugins shared across machines",
+  "owner": {
+    "name": "snowman95"
+  },
+  "plugins": []
+}
