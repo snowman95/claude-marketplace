@@ -14,8 +14,10 @@
       },
       "category": "productivity",
       "source": {
-        "source": "git",
-        "url": "https://github.com/mattpocock/skills.git"
+        "source": "git-subdir",
+        "url": "https://github.com/mattpocock/skills.git",
+        "path": ".",
+        "ref": "main"
       },
       "homepage": "https://github.com/mattpocock/skills"
     }
