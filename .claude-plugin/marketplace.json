@@ -7,6 +7,16 @@
   },
   "plugins": [
     {
+      "name": "ticket-workflow",
+      "description": "Non-trivial implementation workflow: Phase 0~5 (context loading → research → plan → annotation cycle → checklist → implementation). Jira-ticket-based by default, supports generic mode without a ticket.",
+      "author": {
+        "name": "snowman95"
+      },
+      "category": "productivity",
+      "source": "./plugins/ticket-workflow",
+      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/ticket-workflow"
+    },
+    {
       "name": "mattpocock-skills",
       "description": "Matt Pocock's engineering & productivity skills (diagnose, tdd, triage, grill-with-docs, handoff, write-a-skill, etc.)",
       "author": {
