@@ -5,5 +5,19 @@
   "owner": {
     "name": "snowman95"
   },
-  "plugins": []
+  "plugins": [
+    {
+      "name": "mattpocock-skills",
+      "description": "Matt Pocock's engineering & productivity skills (diagnose, tdd, triage, grill-with-docs, handoff, write-a-skill, etc.)",
+      "author": {
+        "name": "Matt Pocock"
+      },
+      "category": "productivity",
+      "source": {
+        "source": "github",
+        "repo": "mattpocock/skills"
+      },
+      "homepage": "https://github.com/mattpocock/skills"
+    }
+  ]
 }
