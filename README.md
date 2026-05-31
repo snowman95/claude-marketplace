@@ -231,6 +231,110 @@ claude plugin install my-plugin@snowman95-marketplace
 
 ---
 
+## 스킬 작성 가이드라인 — 경량화가 기본 원칙
+
+> **핵심 원칙**: 모든 설치된 스킬의 `description`은 **매 세션의 시스템 프롬프트에 항상 포함**됩니다.
+> 즉, 스킬 하나하나가 **모든 대화에 영구적인 토큰 비용**을 부과합니다.
+> "있으면 좋은" 정도로는 들이지 말 것. **확실히 자주 쓸 것만, 그것도 최대한 가볍게.**
+
+### 1. 경량 스킬 vs 헤비 스킬 — 좋은 예와 나쁜 예
+
+**👍 좋은 예: `grill-me` (mattpocock-skills)**
+
+본문 단 3줄로 "사용자에게 끈질기게 인터뷰해서 숨겨진 맥락 끌어내기"라는 목적을 완벽히 달성:
+
+```markdown
+Interview me relentlessly about every aspect of this plan until we reach a
+shared understanding. Walk down each branch of the design tree, resolving
+dependencies between decisions one-by-one. For each question, provide your
+recommended answer.
+
+Ask the questions one at a time.
+
+If a question can be answered by exploring the codebase, explore the
+codebase instead.
+```
+
+LLM의 추론 능력을 신뢰하고, 절차를 시시콜콜 지시하지 않음.
+같은 목적이라면 이렇게 짧게 쓰는 것이 항상 우선.
+
+**👎 나쁜 예: 헤비 스킬 (예: `ouroboros` 류)**
+
+같은 "인터뷰로 숨은 맥락 파악" 목적인데 수백 줄짜리 단계별 가이드, 페르소나 정의,
+state machine, 산출물 템플릿 등으로 부풀린 형태.
+LLM이 이미 잘 하는 일을 굳이 손잡고 끌어주려다 토큰만 잡아먹습니다.
+
+**판단 기준**: 같은 결과를 더 짧은 글로 얻을 수 있다면 그 짧은 글이 정답.
+
+### 2. SKILL.md 작성 규칙
+
+| 규칙 | 기준 |
+|---|---|
+| **SKILL.md 길이** | 100줄 이하 목표. 50줄 이하면 더 좋음. 10줄짜리 `grill-me`가 모범. |
+| **본문 1줄** | "이 한 줄이 사라지면 스킬 의도가 망가지나?" 자문. 아니면 삭제. |
+| **절차 나열** | LLM이 스스로 추론 가능한 단계는 적지 말 것. 사람이 봐도 의외인 단계만 명시. |
+| **체크리스트/템플릿** | 정말 매번 깜빡하는 항목만. 일반 상식은 빼기. |
+| **외부 리소스** | 100줄 넘으면 `REFERENCE.md`/`EXAMPLES.md`/`scripts/`로 분리 (progressive disclosure). |
+
+### 3. `description` 필드가 가장 중요
+
+스킬의 frontmatter `description`은 **에이전트가 그 스킬을 호출할지 말지 결정하는 유일한 근거**입니다 (본문은 호출된 후에야 읽힘).
+
+**형식**:
+- 최대 1024자
+- 3인칭
+- **1번째 문장**: 무엇을 하는가
+- **2번째 문장**: `Use when [구체적인 트리거]` — 키워드, 상황, 파일 종류 등
+
+**좋은 예**:
+```
+Extract text and tables from PDF files, fill forms, merge documents.
+Use when working with PDF files or when user mentions PDFs, forms, or document extraction.
+```
+
+**나쁜 예**:
+```
+Helps with documents.
+```
+→ 다른 문서 관련 스킬과 구분 불가. 에이전트가 호출 안 함.
+
+### 4. 디렉토리 구조 (progressive disclosure)
+
+```
+skill-name/
+├── SKILL.md         # 필수. 가장 짧게.
+├── REFERENCE.md     # 100줄 넘는 상세 — 필요할 때만 LLM이 읽음
+├── EXAMPLES.md      # 케이스별 예시 — 필요할 때만 LLM이 읽음
+└── scripts/         # 결정적 작업(검증/포매팅/파싱) 스크립트
+    └── helper.js
+```
+
+**스크립트를 둘 때**: 결정적 연산(스키마 검증, 포맷 변환, 파일 파싱)은 LLM이 매번 재생성하기보단 스크립트로 빼는 것이 토큰과 정확도 둘 다에 이득.
+
+### 5. 추가 전 체크리스트 (마켓플레이스에 올리기 전에)
+
+- [ ] **description**에 구체적 트리거가 있나 (`Use when ...`)?
+- [ ] **SKILL.md가 100줄 이하**인가?
+- [ ] LLM이 알아서 할 수 있는 단계를 시시콜콜 지시하지 않았나?
+- [ ] 같은 일을 하는 더 짧은 형태가 가능한가? 가능하면 그쪽으로.
+- [ ] 100줄 넘는 자료는 `REFERENCE.md`/`EXAMPLES.md`로 분리했나?
+- [ ] 시간 의존적인 정보 (날짜, 버전 핀 등)는 본문에서 빼고 자동 갱신 가능한 형태로 만들었나?
+- [ ] 진짜 자주 쓸 것인가, 아니면 "있으면 좋은" 정도인가? 후자면 들이지 말 것.
+
+### 6. 토큰 비용을 직접 확인
+
+설치 후 항상:
+
+```bash
+claude plugin details <plugin-name>
+```
+
+`always-on` (매 세션 비용)과 `on-invoke` (호출 시 비용)이 표시됩니다.
+스킬이 14개 있는 `mattpocock-skills`도 always-on이 ~1,353 토큰. 한두 줄짜리 description의 누적입니다.
+이 값이 예상보다 크면 description이 길거나 항상 로드되는 자료가 있다는 신호.
+
+---
+
 ## 시행착오 메모 (Troubleshooting)
 
 ### ❌ `git@github.com: Permission denied (publickey)`
