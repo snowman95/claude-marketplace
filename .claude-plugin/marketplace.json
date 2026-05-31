@@ -15,9 +15,7 @@
       "category": "productivity",
       "source": {
         "source": "github",
-        "repo": "mattpocock/skills",
-        "commit": "e3b90b5238f38cdea5996e16861dcae28ef52eda",
-        "sha": "e3b90b5238f38cdea5996e16861dcae28ef52eda"
+        "repo": "mattpocock/skills"
       },
       "homepage": "https://github.com/mattpocock/skills"
     }
