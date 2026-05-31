@@ -2,5 +2,11 @@
   "name": "ticket-workflow",
   "version": "0.1.0",
   "description": "Non-trivial implementation workflow: Phase 0~5 (context loading → research → plan → annotation cycle → checklist → implementation). Jira-ticket-based by default, supports generic mode without a ticket.",
-  "skills": ["./skills/ticket-workflow"]
+  "skills": [
+    "./skills/ticket-workflow",
+    "./skills/ticket-pull",
+    "./skills/ticket-pull-all",
+    "./skills/ticket-commit",
+    "./skills/ticket-review"
+  ]
 }
