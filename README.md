@@ -74,23 +74,20 @@ Claude Code 안에서는 `claude plugin` 대신 `/plugin` 슬래시 명령으로
 | 타입 | 형태 | 용도 |
 |---|---|---|
 | **로컬 경로 (문자열)** | `"source": "./plugins/my-plugin"` | 이 마켓플레이스 repo 안의 디렉토리 |
-| **github** | `{ "source": "github", "repo": "owner/repo", "commit": "...", "sha": "..." }` | repo 루트 전체가 하나의 plugin일 때 (예: mattpocock/skills) |
-| **git-subdir** | `{ "source": "git-subdir", "url": "https://...", "path": "plugins/X", "ref": "main", "sha": "..." }` | 다른 repo 안의 **서브디렉토리**가 하나의 plugin일 때 |
+| **github** | `{ "source": "github", "repo": "owner/repo" }` (+ 선택: `commit`, `sha`) | repo 루트 전체가 하나의 plugin일 때 (예: mattpocock/skills) |
+| **git-subdir** | `{ "source": "git-subdir", "url": "https://...", "path": "plugins/X", "ref": "main" }` (+ 선택: `sha`) | 다른 repo 안의 **서브디렉토리**가 하나의 plugin일 때 |
 | **url** | `{ "source": "url", "url": "..." }` | tarball/zip URL (드물게 사용) |
 
 ---
 
-## Recipe: 남의 GitHub repo를 내 마켓플레이스에 참조 등록
+## Recipe: 남의 GitHub repo를 내 마켓플레이스에 참조 등록 (기본 — 자동 업데이트)
+
+대부분의 개인 사용 케이스에서는 **commit을 pin 하지 않는 것**을 권장합니다.
+원작자의 기본 브랜치를 추적하므로 `claude plugin update <name>` 한 줄로 최신 변경을 받을 수 있습니다.
+
+### 1. `marketplace.json`의 `plugins` 배열에 항목 추가
 
 `mattpocock/skills` (repo 루트가 plugin)를 예시로:
-
-### 1. 최신 commit SHA 받기
-
-```bash
-gh api repos/mattpocock/skills/commits/main --jq '.sha'
-```
-
-### 2. `marketplace.json`의 `plugins` 배열에 항목 추가
 
 ```json
 {
@@ -100,17 +97,13 @@ gh api repos/mattpocock/skills/commits/main --jq '.sha'
   "category": "productivity",
   "source": {
     "source": "github",
-    "repo": "mattpocock/skills",
-    "commit": "e3b90b5238f38cdea5996e16861dcae28ef52eda",
-    "sha":    "e3b90b5238f38cdea5996e16861dcae28ef52eda"
+    "repo": "mattpocock/skills"
   },
   "homepage": "https://github.com/mattpocock/skills"
 }
 ```
 
-**⚠️ 중요**: `commit`과 `sha` **둘 다 동일한 commit SHA**를 넣습니다. `sha`를 tree SHA로 넣으면 `Cannot switch branch to a non-commit` 에러가 납니다.
-
-### 3. push & 설치
+### 2. push & 설치
 
 ```bash
 cd ~/claude-marketplace
@@ -120,17 +113,67 @@ claude plugin marketplace update snowman95-marketplace
 claude plugin install mattpocock-skills@snowman95-marketplace
 ```
 
-### 4. 나중에 새 commit으로 업데이트하려면
-
-플러그인 commit이 pin 되어있어서 자동으로 안 따라옵니다. 갱신하려면:
+### 3. 나중에 새 commit으로 업데이트하려면
 
 ```bash
-gh api repos/mattpocock/skills/commits/main --jq '.sha'   # 새 SHA 확인
-# marketplace.json의 commit/sha 두 곳 다 새 값으로 수정
-git commit -am "Bump mattpocock-skills" && git push
 claude plugin marketplace update snowman95-marketplace
 claude plugin update mattpocock-skills
 ```
+
+`marketplace.json`을 건드릴 필요 없음.
+
+---
+
+## Recipe (Alternative): commit을 pin 해서 등록
+
+특정 버전에 **고정**시키고 싶을 때 사용. `marketplace.json`을 직접 수정해야만 업데이트되므로 변경이 명시적이고 감사 가능해집니다.
+
+### 언제 pin을 쓰나
+
+- **조직 환경 / 컴플라이언스**: 새 버전이 보안 리뷰, QA, SBOM 검증 등을 통과해야만 배포 허용
+- **재현성이 중요한 환경**: 모든 팀원/CI/서버가 정확히 같은 commit을 쓰도록 보장
+- **공급망 보안**: 원작자 계정이 탈취되거나 의도적으로 악의적 commit이 push 되어도 기존 pin은 영향 없음
+- **신뢰도가 낮은 외부 repo**: 잘 모르는 제3자 코드를 끌어다 쓸 때 안전판
+- **공식 카탈로그 운영**: 외부 기여를 받는 마켓플레이스라면 pin이 거의 필수 (공식 anthropics/claude-plugins-official도 모든 항목이 pin)
+
+### 1. 최신 commit SHA 받기
+
+```bash
+gh api repos/mattpocock/skills/commits/main --jq '.sha'
+```
+
+### 2. `marketplace.json`에 `commit`과 `sha` 추가
+
+```json
+{
+  "name": "mattpocock-skills",
+  "description": "...",
+  "source": {
+    "source": "github",
+    "repo": "mattpocock/skills",
+    "commit": "e3b90b5238f38cdea5996e16861dcae28ef52eda",
+    "sha":    "e3b90b5238f38cdea5996e16861dcae28ef52eda"
+  }
+}
+```
+
+**⚠️ 중요**: `commit`과 `sha` **둘 다 동일한 commit SHA**를 넣습니다.
+`sha`를 tree SHA(`gh api repos/.../commits/main --jq '.commit.tree.sha'`로 나오는 값)로 넣으면 `Cannot switch branch to a non-commit` 에러가 납니다.
+
+### 3. push & 설치 — 위와 동일
+
+### 4. 새 버전으로 bump 하려면 (수동, 검증 절차 후)
+
+```bash
+gh api repos/mattpocock/skills/commits/main --jq '.sha'   # 새 SHA 확인
+# (조직 환경) 코드 리뷰, 보안 스캔, 변경점 검토 등 검증 절차 수행
+# marketplace.json의 commit/sha 두 곳 다 새 값으로 수정
+git commit -am "Bump mattpocock-skills to <new-sha>" && git push
+claude plugin marketplace update snowman95-marketplace
+claude plugin update mattpocock-skills
+```
+
+이 PR/commit 자체가 "이 버전이 검증되었다"는 감사 로그가 됩니다.
 
 ---
 
@@ -195,8 +238,8 @@ claude plugin install my-plugin@snowman95-marketplace
 **해결**: `git config --global url."https://github.com/".insteadOf "git@github.com:"` (한 번만)
 
 ### ❌ `Cannot switch branch to a non-commit 'xxxxx'`
-**원인**: `sha` 필드에 tree SHA를 넣음. 
-**해결**: `commit`과 `sha` 둘 다 commit SHA (`gh api repos/.../commits/main --jq '.sha'` 결과)로 통일.
+**원인**: pin 모드에서 `sha` 필드에 tree SHA를 넣음.
+**해결**: `commit`과 `sha` 둘 다 commit SHA (`gh api repos/.../commits/main --jq '.sha'` 결과)로 통일. 또는 pin이 필요 없으면 두 필드를 모두 제거.
 
 ### ❌ `This plugin uses a source type your Claude Code version does not support`
 **원인**: 존재하지 않는 source 타입 사용 (예: `"source": "git"`).
