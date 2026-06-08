@@ -1,0 +1,8 @@
+{
+  "name": "md-to-slides",
+  "version": "1.0.0",
+  "description": "Convert any markdown file into a Figma Slides presentation deck. Analyzes document structure and generates 6-10 dark-themed slides with layout variety (title, 3-column cards, before/after, pipeline, table).",
+  "skills": [
+    "./skills/md-to-slides"
+  ]
+}
