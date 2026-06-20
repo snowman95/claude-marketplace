@@ -1,0 +1,8 @@
+{
+  "name": "setup",
+  "version": "1.0.0",
+  "description": "Claude Code setup utilities: statusline and other configuration helpers.",
+  "skills": [
+    "./skills/statusline-setup"
+  ]
+}
