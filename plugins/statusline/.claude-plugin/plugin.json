@@ -1,0 +1,8 @@
+{
+  "name": "statusline",
+  "version": "1.0.0",
+  "description": "Claude Code statusline: model, context %, token usage, 5h/7d rate limits with color-coded progress bars.",
+  "skills": [
+    "./skills/statusline-setup"
+  ]
+}
