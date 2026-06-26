@@ -1,0 +1,8 @@
+{
+  "name": "show-schedulers",
+  "version": "1.0.0",
+  "description": "Show all custom launchd agents and crontab entries in a unified table.",
+  "skills": [
+    "./skills/show-schedulers"
+  ]
+}
