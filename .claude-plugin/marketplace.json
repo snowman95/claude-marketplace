@@ -50,6 +50,16 @@
       "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/setup"
     },
     {
+      "name": "show-schedulers",
+      "description": "Show all custom launchd agents and crontab entries in a unified table on macOS.",
+      "author": {
+        "name": "snowman95"
+      },
+      "category": "productivity",
+      "source": "./plugins/show-schedulers",
+      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/show-schedulers"
+    },
+    {
       "name": "remotion",
       "description": "Remotion agent skills for AI-powered video creation with React. Includes best practices for animations, rendering, and Remotion-specific patterns.",
       "author": {
