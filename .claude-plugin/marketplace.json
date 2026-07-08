@@ -50,6 +50,16 @@
       "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/quiz-me"
     },
     {
+      "name": "find-unknowns",
+      "description": "Decompose a feature or plan into the four unknowns quadrants (Known-Known / Known-Unknown / Unknown-Known / Unknown-Unknown) to surface holes before implementation, producing actionable probes and prerequisite decisions.",
+      "author": {
+        "name": "snowman95"
+      },
+      "category": "productivity",
+      "source": "./plugins/find-unknowns",
+      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/find-unknowns"
+    },
+    {
       "name": "setup",
       "description": "Claude Code setup utilities: statusline showing model, context %, token usage, and rate limits with color-coded progress bars.",
       "author": {
