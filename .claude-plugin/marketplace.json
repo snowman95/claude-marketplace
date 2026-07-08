@@ -40,6 +40,16 @@
       "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/md-to-slides"
     },
     {
+      "name": "quiz-me",
+      "description": "Verify your understanding of the current ticket or conversation context through a graded quiz. Invoked only via /quiz-me to close the command gap between user and agent.",
+      "author": {
+        "name": "snowman95"
+      },
+      "category": "productivity",
+      "source": "./plugins/quiz-me",
+      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/quiz-me"
+    },
+    {
       "name": "setup",
       "description": "Claude Code setup utilities: statusline showing model, context %, token usage, and rate limits with color-coded progress bars.",
       "author": {
