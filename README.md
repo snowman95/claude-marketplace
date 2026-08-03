@@ -27,6 +27,32 @@ claude plugin install mattpocock-skills@snowman95-marketplace
 
 ---
 
+## Quick start — Cursor (스킬 동기화)
+
+Cursor는 Claude marketplace를 직접 등록할 수 없습니다. 대신 **opt-in manifest + sync 스크립트**로 `~/.cursor/skills/`에 심링크합니다.
+
+```bash
+# 1. 마켓플레이스 repo 클론 (이미 있으면 생략)
+git clone git@github.com:snowman95/claude-marketplace.git ~/Documents/GitHub/claude-marketplace
+
+# 2. manifest에 등록된 스킬을 ~/.cursor/skills/에 심링크
+cd ~/Documents/GitHub/claude-marketplace
+bash platforms/cursor/sync-to-cursor.sh
+
+# 3. (선택) 기존 복사본을 심링크로 교체
+bash platforms/cursor/sync-to-cursor.sh --replace
+
+# 4. (선택) manifest에 없는 기존 marketplace 심링크 정리
+bash platforms/cursor/sync-to-cursor.sh --prune
+```
+
+스킬 추가/제거는 `platforms/cursor/manifest.json`을 편집한 뒤 sync를 다시 실행합니다.
+**manifest에 넣는 스킬만** Cursor 매 세션에 로드되므로, 자주 쓰는 것만 등록하세요.
+
+Cursor Agent에서 "marketplace 스킬 Cursor에 동기화해줘"라고 하면 `cursor-skills-sync` 스킬이 위 절차를 안내합니다.
+
+---
+
 ## 일상 명령어
 
 ```bash
@@ -50,6 +76,34 @@ claude plugin uninstall <plugin-name>
 ```
 
 Claude Code 안에서는 `claude plugin` 대신 `/plugin` 슬래시 명령으로 동일하게 사용 가능.
+
+---
+
+## Repository 구조
+
+스킬 본문은 에이전트 무관한 **canonical** 위치에 두고, 플랫폼별 설정은 thin adapter로 분리합니다.
+
+```
+claude-marketplace/
+├── skills/                    # canonical SKILL.md (Claude·Cursor 공통)
+│   ├── workflow/              # ticket-workflow, ticket-pull, ...
+│   ├── productivity/          # md-to-slides, quiz-me, ...
+│   └── setup/                 # statusline-setup, cursor-skills-sync, ...
+├── scripts/                   # 공유 실행 파일 (statusline.sh 등)
+├── platforms/
+│   └── cursor/
+│       ├── manifest.json      # Cursor opt-in 스킬 목록
+│       └── sync-to-cursor.sh  # ~/.cursor/skills/ 심링크
+├── plugins/                   # Claude marketplace thin bundle (스킬 경로만 참조)
+│   ├── ticket-workflow/.claude-plugin/plugin.json
+│   ├── setup/.claude-plugin/plugin.json
+│   └── ...
+└── .claude-plugin/marketplace.json
+```
+
+- **Claude**: `claude plugin install <name>@snowman95-marketplace` → `plugins/*` 번들
+- **Cursor**: `bash platforms/cursor/sync-to-cursor.sh` → `skills/*` 심링크
+- **hooks/agents** (추후): `platforms/claude/` 아래 Claude 전용으로 추가
 
 ---
 
@@ -182,12 +236,12 @@ claude plugin update mattpocock-skills
 ### 1. 디렉토리 구조 만들기
 
 ```
+skills/{domain}/my-skill/
+└── SKILL.md
+
 plugins/my-plugin/
-├── .claude-plugin/
-│   └── plugin.json
-└── skills/
-    └── my-skill/
-        └── SKILL.md
+└── .claude-plugin/
+    └── plugin.json    # ../../skills/{domain}/my-skill 참조
 ```
 
 ### 2. `plugins/my-plugin/.claude-plugin/plugin.json`
@@ -197,11 +251,11 @@ plugins/my-plugin/
   "name": "my-plugin",
   "version": "0.1.0",
   "description": "...",
-  "skills": ["./skills/my-skill"]
+  "skills": ["../../skills/workflow/my-skill"]
 }
 ```
 
-### 3. `plugins/my-plugin/skills/my-skill/SKILL.md`
+### 3. `skills/workflow/my-skill/SKILL.md`
 
 ```markdown
 ---
@@ -227,6 +281,14 @@ description: 언제 이 스킬이 trigger 되어야 하는지 명확히
 ```bash
 claude plugin marketplace update snowman95-marketplace
 claude plugin install my-plugin@snowman95-marketplace
+```
+
+### 6. (선택) Cursor에도 노출
+
+`platforms/cursor/manifest.json`에 `"workflow/my-skill"` 추가 후:
+
+```bash
+bash platforms/cursor/sync-to-cursor.sh
 ```
 
 ---

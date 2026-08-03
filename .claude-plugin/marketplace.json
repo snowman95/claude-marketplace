@@ -61,7 +61,7 @@
     },
     {
       "name": "setup",
-      "description": "Claude Code setup utilities: statusline showing model, context %, token usage, and rate limits with color-coded progress bars.",
+      "description": "Claude Code and Cursor CLI setup utilities: statusline, Cursor skills sync to ~/.cursor/skills, and configuration helpers.",
       "author": {
         "name": "snowman95"
       },

@@ -13,7 +13,7 @@ This skill installs the statusline script and updates `~/.claude/settings.json`.
 1. **Copy the script** to `~/.claude/statusline.sh`:
 
 ```bash
-cp "$(dirname "$0")/../../statusline.sh" ~/.claude/statusline.sh
+cp "$(dirname "$0")/../../../scripts/statusline.sh" ~/.claude/statusline.sh
 chmod +x ~/.claude/statusline.sh
 ```
 
@@ -47,3 +47,7 @@ my-project on main │ claude-sonnet-4-6 │ Ctx: ████░░░░ 42% �
 - **Context** — progress bar + percentage (green/yellow/red)
 - **Tokens** — input ↓ / output ↑ formatted (K/M)
 - **Rate limits** — 5-hour and 7-day usage % with countdown to reset
+
+## Related
+
+- Cursor CLI variant: `cursor-statusline-setup` skill (`~/.cursor/cli-config.json`)

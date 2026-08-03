@@ -25,12 +25,19 @@ Plan "수정 파일 경로"와 files 목록 1차 대조 (누락·추가 파일 �
 
 ## Phase R3: diff 확보
 
-```bash
-git fetch origin <baseRefName>
-git diff origin/<baseRefName>...HEAD
-```
+**기본: 티켓 변경분만 리뷰한다.** PR 전체 diff(`origin/<base>...HEAD`)는 동봉 커밋·다른 티켓 변경을 포함하므로 1차 스코프로 쓰지 않는다.
 
-diff가 크면 Plan "구현 단계"·"수정 파일 경로" 순으로 범위를 좁혀 읽는다.
+1. PR 커밋 목록에서 **티켓 키가 없는·다른 Jira 키 커밋**을 식별한다.
+2. 티켓 변경분 diff:
+   ```bash
+   git fetch origin <baseRefName>
+   # 예: CWEB-1456 커밋(962d462) 제외, 이후 4커밋만
+   git diff <스코프외_마지막커밋>..HEAD
+   ```
+3. 커밋 메시지에 티켓 키가 없으면 `git show --stat <sha>`로 파일별 소속을 판별한다.
+4. Plan "수정 파일 경로"와 **변경분 diff** 파일 목록을 대조한다.
+
+diff가 크면 Plan "구현 단계"·"수정 파일 경로" 순으로 범위를 좁혀 읽는다. OpenAPI 재생성 커밋에 동반 변경(#1702 등)이 섞이면 **티켓 직접 의존 파일만** 깊게 리뷰하고 나머지는 "동봉, 미검토"로 기록한다.
 
 ## Phase R4: 7개 축 리뷰
 
@@ -78,4 +85,5 @@ diff가 크면 Plan "구현 단계"·"수정 파일 경로" 순으로 범위를 
 ```
 
 선택 frontmatter 추가: `last_pr_review_url`, `last_pr_review_at` (ISO).  
+리뷰 섹션에 **리뷰 diff** 범위(제외 커밋·포함 커밋 SHA)를 반드시 명시한다.  
 `## 문의·Blocked` 본문은 절대 덮어쓰지 않는다.

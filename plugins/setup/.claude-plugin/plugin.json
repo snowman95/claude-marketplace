@@ -1,8 +1,10 @@
 {
   "name": "setup",
-  "version": "1.0.0",
-  "description": "Claude Code setup utilities: statusline and other configuration helpers.",
+  "version": "1.1.0",
+  "description": "Claude Code and Cursor CLI setup utilities: statusline, Cursor skills sync, and other configuration helpers.",
   "skills": [
-    "./skills/statusline-setup"
+    "../../skills/setup/statusline-setup",
+    "../../skills/setup/cursor-statusline-setup",
+    "../../skills/setup/cursor-skills-sync"
   ]
 }

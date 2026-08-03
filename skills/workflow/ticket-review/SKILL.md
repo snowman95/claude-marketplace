@@ -27,7 +27,7 @@ description: >-
 | R0 | `gh pr checkout <URL>`로 PR head checkout (필수 — 이후 모든 작업의 전제) |
 | R1 | 티켓 md 없으면 ticket-pull 생성. ticket-workflow Phase 0~2 적용 (이미 있으면 읽기만) |
 | R2 | PR 메타 수집 (`gh pr view --json …`). 변경 파일 vs Plan "수정 파일 경로" 1차 대조 |
-| R3 | `git diff origin/<base>...HEAD` 로 전체 변경 확보 |
+| R3 | **티켓 변경분** diff 확보 (다른 티켓·동봉 커밋 제외 후 `git diff <제외커밋>..HEAD`) |
 | R4 | 이행·범위·누락·리스크·일관성·품질·가독성·대안 7개 축으로 리뷰 |
 | R5 | `{JIRA-KEY}.md` 하단에 `## PR 리뷰: #{number}` 섹션 기록 |
 
