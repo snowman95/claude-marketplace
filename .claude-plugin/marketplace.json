@@ -61,7 +61,7 @@
     },
     {
       "name": "setup",
-      "description": "Claude Code and Cursor CLI setup utilities: statusline, Cursor skills sync to ~/.cursor/skills, and configuration helpers.",
+      "description": "Claude Code and Cursor CLI setup utilities: statusline and configuration helpers.",
       "author": {
         "name": "snowman95"
       },
