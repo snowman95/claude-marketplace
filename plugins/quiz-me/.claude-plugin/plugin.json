@@ -1,8 +1,0 @@
-{
-  "name": "quiz-me",
-  "version": "1.0.0",
-  "description": "Verify your understanding of the current ticket or conversation context through a graded quiz. Invoked only via /quiz-me to close the command gap between user and agent.",
-  "skills": [
-    "../../skills/productivity/quiz-me"
-  ]
-}

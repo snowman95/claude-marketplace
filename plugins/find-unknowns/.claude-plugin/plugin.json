@@ -1,8 +1,0 @@
-{
-  "name": "find-unknowns",
-  "version": "1.0.0",
-  "description": "Decompose a feature or plan into the four unknowns quadrants (Known-Known / Known-Unknown / Unknown-Known / Unknown-Unknown) to surface holes before implementation, producing actionable probes and prerequisite decisions.",
-  "skills": [
-    "../../skills/productivity/find-unknowns"
-  ]
-}

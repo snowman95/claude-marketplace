@@ -7,14 +7,13 @@
   },
   "plugins": [
     {
-      "name": "ticket-workflow",
-      "description": "Non-trivial implementation workflow: Phase 0~5 (context loading → research → plan → annotation cycle → checklist → implementation). Jira-ticket-based by default, supports generic mode without a ticket.",
+      "name": "snowman95-marketplace",
+      "description": "ticket-workflow, md-to-slides, quiz-me, find-unknowns, setup utilities 등 개인 스킬 모음",
       "author": {
         "name": "snowman95"
       },
       "category": "productivity",
-      "source": "./plugins/ticket-workflow",
-      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/ticket-workflow"
+      "source": "./"
     },
     {
       "name": "mattpocock-skills",
@@ -28,56 +27,6 @@
         "repo": "mattpocock/skills"
       },
       "homepage": "https://github.com/mattpocock/skills"
-    },
-    {
-      "name": "md-to-slides",
-      "description": "Convert any markdown file into a Figma Slides presentation. Analyzes document structure and generates 6-10 dark-themed slides with layout variety.",
-      "author": {
-        "name": "snowman95"
-      },
-      "category": "productivity",
-      "source": "./plugins/md-to-slides",
-      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/md-to-slides"
-    },
-    {
-      "name": "quiz-me",
-      "description": "Verify your understanding of the current ticket or conversation context through a graded quiz. Invoked only via /quiz-me to close the command gap between user and agent.",
-      "author": {
-        "name": "snowman95"
-      },
-      "category": "productivity",
-      "source": "./plugins/quiz-me",
-      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/quiz-me"
-    },
-    {
-      "name": "find-unknowns",
-      "description": "Decompose a feature or plan into the four unknowns quadrants (Known-Known / Known-Unknown / Unknown-Known / Unknown-Unknown) to surface holes before implementation, producing actionable probes and prerequisite decisions.",
-      "author": {
-        "name": "snowman95"
-      },
-      "category": "productivity",
-      "source": "./plugins/find-unknowns",
-      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/find-unknowns"
-    },
-    {
-      "name": "setup",
-      "description": "Claude Code and Cursor CLI setup utilities: statusline and configuration helpers.",
-      "author": {
-        "name": "snowman95"
-      },
-      "category": "productivity",
-      "source": "./plugins/setup",
-      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/setup"
-    },
-    {
-      "name": "show-schedulers",
-      "description": "Show all custom launchd agents and crontab entries in a unified table on macOS.",
-      "author": {
-        "name": "snowman95"
-      },
-      "category": "productivity",
-      "source": "./plugins/show-schedulers",
-      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/show-schedulers"
     },
     {
       "name": "remotion",
