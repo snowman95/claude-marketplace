@@ -1,10 +1,8 @@
 ---
 name: ticket-pull
 description: >-
-  Fetches a Jira issue via Atlassian MCP and saves it to
-  Obsidian tasks/{releaseVersion}/{JIRA-KEY}.md. Key prefix and digit
-  count vary by org. Use when user says "ticket pull", "티켓 풀",
-  or "Jira에서 티켓 받아와".
+  Jira 이슈를 Atlassian MCP로 가져와 .claude/tickets/{fixVersion}/{JIRA-KEY}.md에 저장한다.
+disable-model-invocation: true
 ---
 
 # ticket-pull
@@ -13,7 +11,7 @@ description: >-
 
 1. 티켓 키 확인 (없으면 물어본다).
 2. `getJiraIssue` MCP로 이슈 조회 (summary, description, status, fixVersions, comment 등).
-3. `fixVersions` 표시 이름으로 `tasks/{fixVersion}/` 폴더 결정 (없으면 생성).
+3. `fixVersions` 표시 이름으로 `.claude/tickets/{fixVersion}/` 폴더 결정 (없으면 생성).
 4. `{JIRA-KEY}.md` 신규 생성 또는 **재-pull merge** (아래 규칙).
 5. 완료 후 절대 경로 알리고 ticket-workflow 다음 단계 안내.
 
@@ -24,4 +22,4 @@ description: >-
 - `blocked`: 기존 값 유지 (신규만 `false`).
 - `## Phase 1`, `## Plan`, `## 구현 체크리스트`: 있으면 삭제하지 않는다.
 
-> 파일 템플릿·fixVersion 복수 처리·vault 경로 규칙 → `REFERENCE.md`
+> 파일 템플릿·fixVersion 복수 처리 세부 규칙 → `REFERENCE.md`

@@ -87,3 +87,7 @@ diff가 크면 Plan "구현 단계"·"수정 파일 경로" 순으로 범위를 
 선택 frontmatter 추가: `last_pr_review_url`, `last_pr_review_at` (ISO).  
 리뷰 섹션에 **리뷰 diff** 범위(제외 커밋·포함 커밋 SHA)를 반드시 명시한다.  
 `## 문의·Blocked` 본문은 절대 덮어쓰지 않는다.
+
+## Phase R6: HTML 렌더링
+
+티켓 md 기록 완료 후 `render-html` 스킬을 호출해 리뷰 결과를 브라우저에 띄운다.

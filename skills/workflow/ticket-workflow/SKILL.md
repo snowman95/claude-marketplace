@@ -1,26 +1,21 @@
 ---
 name: ticket-workflow
 description: >-
-  Non-trivial implementation workflow covering Phase 0~5 (context loading →
-  research → plan → annotation cycle → checklist → implementation).
-  Defaults to Jira-ticket mode using a ticket md fetched by ticket-pull;
-  also supports a generic (no-ticket) mode when the user says so.
-  Use when user asks for "ticket workflow", "워크플로", "티켓 워크플로", or
-  "workflow" on any non-trivial implementation task.
+  Phase 0~5(컨텍스트 로딩 → Research → Plan → Annotation → 체크리스트 → 구현) 구현 워크플로.
+  티켓 모드와 범용 모드 지원.
+disable-model-invocation: true
 ---
 
 # ticket-workflow
 
-**절대 금지**: 승인된 plan이 있기 전까지 코드를 작성하지 않는다.
-
-사용자가 명시적으로 "한 번에 쭉" / "승인 없이 구현까지"를 요청하면 전체 Phase를 연속 진행 가능.
+코드 작성은 plan 승인 이후에만. 사용자가 "한 번에 쭉" / "승인 없이 구현까지"를 명시하면 전체 Phase 연속 진행 가능.
 
 ## 동작 모드
 
 | 모드 | 조건 | plan 위치 |
 |------|------|-----------|
-| **티켓 모드** | 티켓 키 또는 ticket-pull md가 있을 때 | `tasks/{releaseVersion}/{JIRA-KEY}.md` 내 `## Plan` |
-| **범용 모드** | 티켓 없이 작업 요청 시 | `tasks/{모듈명}/{작업명}_plan.md` |
+| **티켓 모드** | 티켓 키 또는 ticket-pull md가 있을 때 | `.claude/tickets/{releaseVersion}/{JIRA-KEY}.md` 내 `## Plan` |
+| **범용 모드** | 티켓 없이 작업 요청 시 | `.claude/tasks/{모듈명}/{작업명}_plan.md` |
 
 ## QA 명확성 게이트 (버그 수정 시)
 
@@ -42,9 +37,10 @@ Phase별 상세 절차는 → `REFERENCE.md`
 |-------|------|------|
 | 0 | 컨텍스트 로딩 | `architecture.md` + `modules/{모듈명}_research.md` 로딩 |
 | 1 | Research | 깊이 읽기 → 문서 갱신. 완료 멘트: `research 완료, 검토해주세요` |
-| 2 | Plan | research 승인 후 plan 작성. 완료 멘트: `plan 작성 완료, 검토해주세요` |
-| 3 | Annotation Cycle | Obsidian 인라인 메모 → plan 반영. 구현 안 함 |
+| 2 | Plan | research 승인 후 plan 작성 + render-html 렌더링. 이후 "인터뷰로 plan을 보강하시겠습니까?" 질문 |
+| 3 | Grilling *(선택)* | 긍정 응답 시 grill-me 스킬로 plan stress-test. 부정 응답 시 Phase 4로 바로 이동 |
 | 4 | Todo List | plan 하단에 `## 구현 체크리스트` 추가. 승인 후 Phase 5 |
 | 5 | Implementation | plan 전 항목 실행. 완료마다 체크리스트 체크. 코드 생성·다수 파일 수정은 서브에이전트로 위임 권장 |
 
-> Obsidian vault 경로·문서 구조·문서 계층은 CLAUDE.md 참조.
+> 문서 구조·문서 계층 상세 → `REFERENCE.md`
+

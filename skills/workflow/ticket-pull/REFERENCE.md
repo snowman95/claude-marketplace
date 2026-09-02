@@ -49,11 +49,6 @@ url: https://your-site.atlassian.net/browse/WPQ-16135
 - 복수면 사용자에게 어느 폴더에 둘지 확인하거나 첫 번째를 사용하고 frontmatter에 전체 기록.
 - 비어 있으면 사용자에게 버전 문자열 입력 요청.
 
-## vault 경로
-
-CLAUDE.md 또는 rules/workflow.mdc 참조.  
-`jh.han` 기준: `~/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects/{프로젝트명}/`
-
 ## MCP 조회 필드
 
 `summary`, `description`, `status`, `issuetype`, `priority`, `created`, `updated`, `fixVersions`, `comment`, `project`  

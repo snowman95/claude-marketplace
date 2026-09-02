@@ -21,8 +21,3 @@ project = WPQ AND fixVersion = "3.0.0" ORDER BY key ASC
 `summary`, `description`, `status`, `issuetype`, `priority`, `created`, `updated`, `fixVersions`, `comment`  
 도구가 허용하는 범위에서 최대한 포함.
 
-## vault·레포 라우팅
-
-ticket-pull과 동일.  
-Summary 접두로 shop(`myproject`) vs admin(`myproject_admin`) 결정.  
-`jh.han`: vault 루트 `~/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects/` 아래 프로젝트 폴더만 사용.
