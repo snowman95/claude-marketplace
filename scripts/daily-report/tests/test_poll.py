@@ -403,7 +403,7 @@ def test_md_declared_figma_timestamp_drift_surfaces_on_the_first_run(rig):
     events = [e for e in rig.pending() if e["ticket"] == "CWEB-1547"]
     assert [e["kind"] for e in events] == ["figma"]
     assert events[0]["attention"] is True
-    assert "2026-08-20 → 2026-09-01" in events[0]["text"]
+    assert "08-20 13:11 → 09-01 18:00" in events[0]["text"]
 
 
 def test_md_without_any_declaration_still_starts_tracking(rig):
@@ -815,3 +815,285 @@ def test_jql_shape(rig):
     assert 'status IN ("Ready to Deploy")' in parked
     assert "project IN" in qa
     assert "created >= -7d" in qa
+
+
+# ---------------------------------------------------------------------------
+# 알림 (Slack 스레드 답글 / 실패 알림)
+# ---------------------------------------------------------------------------
+
+BRIEFING_TS = "1788484474.799609"
+THURSDAY = "2026-09-03"
+
+
+class FakeNotifier:
+    """notify.Notifier 계약만 흉내낸다. 네트워크는 건드리지 않는다."""
+
+    def __init__(self):
+        self.sent = []
+        self.result = BRIEFING_TS
+
+    def send(self, text, thread_ts=None):
+        self.sent.append({"text": text, "thread_ts": thread_ts})
+        return self.result
+
+    def update(self, ts, text):
+        return False
+
+    @property
+    def texts(self):
+        return [call["text"] for call in self.sent]
+
+
+@pytest.fixture
+def notifier(monkeypatch):
+    fake = FakeNotifier()
+    monkeypatch.setattr(poll, "_build_notifier", lambda cfg: fake)
+    return fake
+
+
+def baseline_tickets(overrides=None):
+    tickets = {
+        key: {"status": status, "links": {"confluence": {}, "figma": {}}}
+        for key, status in ACTIVE
+    }
+    for key, status in (overrides or {}).items():
+        tickets[key]["status"] = status
+    return tickets
+
+
+def seed_state(rig, slack=None, tickets=None):
+    data = state_mod.empty_state()
+    if slack is not None:
+        data["slack"] = slack
+    data["tickets"] = tickets if tickets is not None else baseline_tickets()
+    state_mod.save(rig.state_path, data)
+
+
+def test_events_become_one_thread_reply(rig, notifier):
+    rig.standard_vault()
+    seed_state(rig, slack={"date": FRIDAY, "ts": BRIEFING_TS})
+    rig.jira.status("CWEB-1547", "리뷰중")
+    rig.jira.status("CWEB-1548", "완료")
+
+    assert rig.run() == 0
+
+    assert len(notifier.sent) == 1
+    call = notifier.sent[0]
+    assert call["thread_ts"] == BRIEFING_TS
+    assert "CWEB-1547" in call["text"]
+    assert "CWEB-1548" in call["text"]
+    assert len(call["text"].splitlines()) == 2
+
+
+def test_thread_reply_uses_slack_mrkdwn(rig, notifier):
+    rig.standard_vault()
+    seed_state(rig, slack={"date": FRIDAY, "ts": BRIEFING_TS})
+    rig.jira.status("CWEB-1547", "리뷰중")
+
+    rig.run()
+
+    text = notifier.sent[0]["text"]
+    assert "**" not in text
+    assert "*status*" in text
+    assert text.startswith("`")
+    assert "진행 중 → 리뷰중" in text
+
+
+def test_attention_event_is_marked_in_the_thread_reply(rig, notifier):
+    rig.md("myproject", "CWEB-1547", links=CONFLUENCE_LINKS)
+    seed_state(
+        rig,
+        slack={"date": FRIDAY, "ts": BRIEFING_TS},
+        tickets=baseline_tickets(),
+    )
+    state_path = rig.state_path
+    data = json.loads(state_path.read_text(encoding="utf-8"))
+    data["tickets"]["CWEB-1547"]["links"]["confluence"] = {"5919834330": 44}
+    state_mod.save(state_path, data)
+    rig.confluence.versions = {"5919834330": 45}
+
+    rig.run()
+
+    text = notifier.sent[0]["text"]
+    assert "⚠️" in text
+    assert "*Confluence*" in text
+    assert "v44 → v45" in text
+
+
+def test_stale_briefing_date_sends_nothing(rig, notifier):
+    rig.standard_vault()
+    seed_state(rig, slack={"date": THURSDAY, "ts": BRIEFING_TS})
+    rig.jira.status("CWEB-1547", "리뷰중")
+
+    assert rig.run() == 0
+
+    assert notifier.sent == []
+    assert "리뷰중" in rig.p1547.read_text(encoding="utf-8")
+
+
+def test_missing_slack_key_sends_nothing(rig, notifier):
+    rig.standard_vault()
+    seed_state(rig)
+    rig.jira.status("CWEB-1547", "리뷰중")
+
+    assert rig.run() == 0
+
+    assert notifier.sent == []
+
+
+def test_slack_entry_without_ts_sends_nothing(rig, notifier):
+    rig.standard_vault()
+    seed_state(rig, slack={"date": FRIDAY, "ts": ""})
+    rig.jira.status("CWEB-1547", "리뷰중")
+
+    assert rig.run() == 0
+
+    assert notifier.sent == []
+
+
+def test_no_events_sends_nothing(rig, notifier):
+    rig.standard_vault()
+    seed_state(rig, slack={"date": FRIDAY, "ts": BRIEFING_TS})
+
+    assert rig.run() == 0
+
+    assert notifier.sent == []
+
+
+def test_dry_run_never_touches_the_notifier(rig, notifier, capsys):
+    rig.standard_vault()
+    seed_state(rig, slack={"date": FRIDAY, "ts": BRIEFING_TS})
+    rig.jira.status("CWEB-1547", "리뷰중")
+
+    assert rig.run(dry_run=True) == 0
+
+    assert notifier.sent == []
+    out = capsys.readouterr().out
+    assert f"[dry-run] 알림(thread {BRIEFING_TS})" in out
+    assert "CWEB-1547 *status* 진행 중 → 리뷰중" in out
+
+
+def test_failed_send_still_saves_state(rig, notifier):
+    rig.standard_vault()
+    seed_state(rig, slack={"date": FRIDAY, "ts": BRIEFING_TS})
+    rig.jira.status("CWEB-1547", "리뷰중")
+    notifier.result = None  # 발송 실패
+
+    assert rig.run() == 0
+
+    assert len(notifier.sent) == 1
+    assert rig.state()["tickets"]["CWEB-1547"]["status"] == "리뷰중"
+    assert "리뷰중" in rig.p1547.read_text(encoding="utf-8")
+
+
+def test_raising_notifier_does_not_kill_the_poll(rig, monkeypatch):
+    class Boom:
+        def send(self, text, thread_ts=None):
+            raise RuntimeError("slack down")
+
+        def update(self, ts, text):
+            return False
+
+    monkeypatch.setattr(poll, "_build_notifier", lambda cfg: Boom())
+    rig.standard_vault()
+    seed_state(rig, slack={"date": FRIDAY, "ts": BRIEFING_TS})
+    rig.jira.status("CWEB-1547", "리뷰중")
+
+    assert rig.run() == 0
+
+    assert rig.state()["tickets"]["CWEB-1547"]["status"] == "리뷰중"
+
+
+def test_third_failure_sends_a_root_message(rig, notifier):
+    rig.standard_vault()
+    rig.jira.fail = ApiError(500, "/rest/api/3/search/jql", "boom")
+
+    rig.run()
+    rig.run()
+    assert notifier.sent == []
+
+    rig.run()
+
+    assert len(notifier.sent) == 1
+    call = notifier.sent[0]
+    assert call["thread_ts"] is None
+    assert call["text"].startswith("🔴")
+    assert "3회 연속 실패" in call["text"]
+    assert len(call["text"].splitlines()) == 2
+    assert rig.state()["notified_error_at"]
+
+
+@pytest.mark.parametrize("extra", [1, 2])
+def test_further_failures_do_not_spam(rig, notifier, extra):
+    rig.standard_vault()
+    rig.jira.fail = ApiError(500, "/rest/api/3/search/jql", "boom")
+    for _ in range(3 + extra):
+        rig.run()
+
+    assert len(notifier.sent) == 1
+    assert rig.state()["consecutive_errors"] == 3 + extra
+
+
+def test_recovery_resets_the_notification_latch(rig, notifier):
+    rig.standard_vault()
+    rig.jira.fail = ApiError(500, "/rest/api/3/search/jql", "boom")
+    for _ in range(3):
+        rig.run()
+    assert len(notifier.sent) == 1
+
+    rig.jira.fail = None
+    rig.run()
+    assert rig.state()["notified_error_at"] is None
+
+    rig.jira.fail = ApiError(500, "/rest/api/3/search/jql", "boom")
+    for _ in range(3):
+        rig.run()
+
+    assert len(notifier.sent) == 2
+
+
+def test_dry_run_never_sends_the_failure_notification(rig, notifier, capsys):
+    rig.standard_vault()
+    rig.jira.fail = ApiError(500, "/rest/api/3/search/jql", "boom")
+    rig.run()
+    rig.run()
+    assert rig.state()["consecutive_errors"] == 2
+
+    assert rig.run(dry_run=True) == 0
+
+    assert notifier.sent == []
+    assert "연속 실패" in capsys.readouterr().out
+    assert rig.state()["consecutive_errors"] == 2  # dry-run 은 상태도 쓰지 않는다
+
+
+def test_failure_notification_carries_one_error_line(rig, notifier):
+    rig.standard_vault()
+    rig.jira.fail = ApiError(500, "/rest/api/3/search/jql", "boom")
+    for _ in range(3):
+        rig.run()
+
+    body = notifier.sent[0]["text"].splitlines()[1]
+    assert body
+    assert "\n" not in body
+
+
+def test_notifications_never_leak_the_token(rig, notifier, capsys):
+    rig.standard_vault()
+    seed_state(rig, slack={"date": FRIDAY, "ts": BRIEFING_TS})
+    rig.jira.status("CWEB-1547", "리뷰중")
+
+    rig.run()
+
+    assert "atl-token" not in notifier.sent[0]["text"]
+    assert "atl-token" not in capsys.readouterr().out
+
+
+def test_unconfigured_notify_falls_back_to_the_local_notifier(rig):
+    """`[notify]` 가 없으면 기존 macOS 알림으로 내려간다."""
+    rig.standard_vault()
+    rig.jira.fail = ApiError(500, "/rest/api/3/search/jql", "boom")
+    for _ in range(3):
+        rig.run()
+
+    assert len(rig.notifications) == 1
+    assert rig.notifications[0][0] == "osascript"

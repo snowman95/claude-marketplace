@@ -276,15 +276,114 @@ def test_diff_confluence_version_decrease_is_ignored(tmp_path):
     assert state.diff_ticket(old, new) == []
 
 
+def figma_pair(old_ts, new_ts):
+    return (
+        ticket(links={"confluence": {}, "figma": {"AbC123": old_ts}}),
+        ticket(links={"confluence": {}, "figma": {"AbC123": new_ts}}),
+    )
+
+
 def test_diff_figma_last_modified_change(tmp_path):
-    old = ticket(links={"confluence": {}, "figma": {"AbC123": "2026-08-20T04:11:00Z"}})
-    new = ticket(links={"confluence": {}, "figma": {"AbC123": "2026-08-29T09:30:00Z"}})
+    old, new = figma_pair("2026-08-20T04:11:00Z", "2026-08-29T09:30:00Z")
     events = state.diff_ticket(old, new)
     assert len(events) == 1
     e = events[0]
     assert e.kind == "figma"
-    assert e.text == "**Figma** `AbC123` 2026-08-20 → 2026-08-29"
+    assert e.text == "**Figma** `AbC123` 08-20 13:11 → 08-29 18:30"
     assert e.attention is True
+
+
+# --- Figma 타임스탬프 지터 (실측: 같은 파일이 초 단위로 흔들린다) ---------
+
+
+def test_diff_figma_one_second_jitter_is_not_a_change(tmp_path):
+    old, new = figma_pair("2026-09-03T08:12:41Z", "2026-09-03T08:12:42Z")
+    assert state.diff_ticket(old, new) == []
+
+
+def test_diff_figma_fifty_nine_second_jitter_is_not_a_change(tmp_path):
+    old, new = figma_pair("2026-09-03T08:12:00Z", "2026-09-03T08:12:59Z")
+    assert state.diff_ticket(old, new) == []
+
+
+def test_diff_figma_exactly_sixty_seconds_is_a_change(tmp_path):
+    old, new = figma_pair("2026-09-03T08:12:00Z", "2026-09-03T08:13:00Z")
+    events = state.diff_ticket(old, new)
+    assert [e.kind for e in events] == ["figma"]
+    assert events[0].text == "**Figma** `AbC123` 09-03 17:12 → 09-03 17:13"
+
+
+def test_diff_figma_hours_apart_is_a_change(tmp_path):
+    old, new = figma_pair("2026-09-03T08:12:41Z", "2026-09-04T01:30:00Z")
+    events = state.diff_ticket(old, new)
+    assert [e.kind for e in events] == ["figma"]
+    assert events[0].text == "**Figma** `AbC123` 09-03 17:12 → 09-04 10:30"
+
+
+def test_diff_figma_backwards_beyond_tolerance_is_a_change(tmp_path):
+    # 롤백도 알아야 한다.
+    old, new = figma_pair("2026-09-04T01:30:00Z", "2026-09-03T08:12:41Z")
+    events = state.diff_ticket(old, new)
+    assert [e.kind for e in events] == ["figma"]
+    assert events[0].text == "**Figma** `AbC123` 09-04 10:30 → 09-03 17:12"
+
+
+def test_diff_figma_backwards_within_tolerance_is_not_a_change(tmp_path):
+    old, new = figma_pair("2026-09-03T08:12:42Z", "2026-09-03T08:12:41Z")
+    assert state.diff_ticket(old, new) == []
+
+
+def test_diff_figma_unparseable_differing_values_fall_back_to_string_compare(tmp_path):
+    old, new = figma_pair("어제쯤", "오늘쯤")
+    events = state.diff_ticket(old, new)
+    assert [e.kind for e in events] == ["figma"]
+    assert events[0].text == "**Figma** `AbC123` 어제쯤 → 오늘쯤"
+
+
+def test_diff_figma_unparseable_equal_values_are_not_a_change(tmp_path):
+    old, new = figma_pair("어제쯤", "어제쯤")
+    assert state.diff_ticket(old, new) == []
+
+
+def test_diff_figma_only_new_parseable_falls_back_to_string_compare(tmp_path):
+    old, new = figma_pair("not-a-date", "2026-09-03T08:12:41Z")
+    events = state.diff_ticket(old, new)
+    assert [e.kind for e in events] == ["figma"]
+    assert events[0].text == "**Figma** `AbC123` not-a-date → 09-03 17:12"
+
+
+def test_diff_figma_only_old_parseable_falls_back_to_string_compare(tmp_path):
+    old, new = figma_pair("2026-09-03T08:12:41Z", "not-a-date")
+    events = state.diff_ticket(old, new)
+    assert [e.kind for e in events] == ["figma"]
+    assert events[0].text == "**Figma** `AbC123` 09-03 17:12 → not-a-date"
+
+
+def test_diff_figma_offset_input_parses_and_compares_by_instant(tmp_path):
+    # 같은 순간을 다른 표기로 준 것뿐이다.
+    old, new = figma_pair("2026-09-03T17:12:41+09:00", "2026-09-03T08:12:41Z")
+    assert state.diff_ticket(old, new) == []
+
+
+def test_diff_figma_offset_input_is_rendered_in_kst(tmp_path):
+    old, new = figma_pair("2026-09-03T17:12:00+09:00", "2026-09-04T10:30:00+09:00")
+    events = state.diff_ticket(old, new)
+    assert events[0].text == "**Figma** `AbC123` 09-03 17:12 → 09-04 10:30"
+
+
+def test_diff_figma_stores_nothing_and_does_not_truncate_inputs(tmp_path):
+    # 비교만 관대하게 한다. 입력 원본은 건드리지 않는다.
+    old, new = figma_pair("2026-09-03T08:12:41Z", "2026-09-03T08:12:42Z")
+    state.diff_ticket(old, new)
+    assert old["links"]["figma"]["AbC123"] == "2026-09-03T08:12:41Z"
+    assert new["links"]["figma"]["AbC123"] == "2026-09-03T08:12:42Z"
+
+
+def test_diff_figma_unparseable_display_is_capped_at_16_chars(tmp_path):
+    long = "x" * 40
+    old, new = figma_pair(long, long + "y")
+    events = state.diff_ticket(old, new)
+    assert events[0].text == f"**Figma** `AbC123` {'x' * 16} → {'x' * 16}"
 
 
 def test_diff_no_change(tmp_path):

@@ -61,7 +61,22 @@ parked: <n>
 
 > 각 섹션의 작성 규칙 → `REFERENCE.md`
 
-### 4. 마무리
+### 4. Slack 발송
+
+브리핑 요약을 본인 DM으로 보낸다. **파일 전문을 그대로 붙여넣지 마라** — 아침에 폰으로 30초 안에 읽히는 분량이 기준이다.
+
+```bash
+python3 ${CLAUDE_PLUGIN_ROOT}/scripts/daily-report/send_brief.py --date <오늘>
+```
+
+본문은 stdin으로 넘긴다. 스크립트가 발송 후 `ts` 를 `_state.json` 의 `slack` 키에 기록하고,
+낮 폴링이 그 `ts` 에 스레드로 변경분을 덧붙인다.
+
+> 메시지 포맷·스레드 규칙 → `REFERENCE.md`
+
+**발송이 실패해도 브리핑은 성공이다.** 파일은 이미 만들어졌다. 실패는 stdout에 한 줄 남기고 넘어간다.
+
+### 5. 마무리
 
 - `_pending.jsonl` 을 `_pending.{어제}.jsonl` 로 로테이트
 - 생성한 파일의 절대 경로를 stdout에 출력 (launchd 로그에 남는다)

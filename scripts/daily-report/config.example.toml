@@ -1,0 +1,40 @@
+# daily-report 설정 템플릿.
+#
+#   cp config.example.toml config.toml
+#
+# `config.toml` 은 gitignore 대상이다 — 개인 값은 커밋되지 않는다.
+#
+# site·email·notify.slack_target 은 여기 적지 않아도 된다. 비워 두면
+# ~/.config/atlassian/daily-track.env 에서 읽는다:
+#
+#   ATLASSIAN_SITE=your-site.atlassian.net
+#   ATLASSIAN_EMAIL=you@example.com
+#   ATLASSIAN_API_TOKEN=...
+#   SLACK_BOT_TOKEN=xoxb-...
+#   SLACK_TARGET=U0XXXXXXX          # DM 받을 사용자 ID 또는 채널 ID
+#
+# config.toml 에 적으면 그쪽이 우선한다.
+
+# Obsidian vault 의 projects/ 루트. 필수.
+vault = "~/path/to/vault/projects"
+
+# site = "your-site.atlassian.net"   # 없으면 $ATLASSIAN_SITE (스킴은 벗겨진다)
+# email = "you@example.com"          # 없으면 $ATLASSIAN_EMAIL
+
+# 활성 폴링에서 빼되 parked 로 세는 상태들.
+parked_statuses = ["Ready to Deploy"]
+
+# QA 후보를 찾을 프로젝트 키와 조회 기간.
+qa_projects = ["WPQ", "WV2Q"]
+qa_lookback_days = 7
+
+# 커밋 활동을 볼 로컬 저장소.
+repos = [
+  "~/path/to/repo-a",
+  "~/path/to/repo-b",
+]
+
+[notify]
+# "slack" | "osascript". 테이블 자체를 지우면 알림을 쓰지 않는다.
+channel = "slack"
+# slack_target = "U0XXXXXXX"        # 없으면 $SLACK_TARGET

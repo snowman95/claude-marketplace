@@ -11,6 +11,7 @@
     "./skills/workflow/ticket-quiz",
     "./skills/workflow/docs-pull",
     "./skills/workflow/ticket-links",
+    "./skills/workflow/ticket-advance",
     "./skills/workflow/daily-brief",
     "./skills/productivity/render-html",
     "./skills/productivity/worktree",

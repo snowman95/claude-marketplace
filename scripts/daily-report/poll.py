@@ -17,12 +17,13 @@ import argparse
 import json
 import os
 import re
-import subprocess
+import subprocess  # noqa: F401 — notify.OsascriptNotifier 가 쓰는 모듈을 테스트가 여기서 대체한다
 import sys
 import tempfile
 from datetime import date as date_cls, datetime, timedelta, timezone
 from pathlib import Path
 
+import notify as notify_mod
 import state as state_mod
 import vault as vault_mod
 from atlassian import ConfluenceClient, JiraClient
@@ -44,6 +45,9 @@ HEADING_RE = re.compile(r"^#{1,2} ")
 
 ERROR_THRESHOLD = 3
 NOTIFY_TITLE = "daily-report"
+SLACK_KEY = "slack"
+NOTIFIED_KEY = "notified_error_at"
+ERROR_HEADLINE = "🔴 daily-report 폴링 {n}회 연속 실패"
 
 
 # ---------------------------------------------------------------------------
@@ -89,6 +93,7 @@ def _now(date_str):
 # ---------------------------------------------------------------------------
 
 def run(cfg, token, now, dry_run=False):
+    notifier = _build_notifier(cfg)
     state_path = cfg.daily_dir / STATE_NAME
     data = state_mod.load(state_path)
     old_tickets = data.get("tickets") or {}
@@ -105,7 +110,7 @@ def run(cfg, token, now, dry_run=False):
     except Exception as exc:
         # Jira 없이는 diff 자체가 성립하지 않는다. 상태를 그대로 두고 물러난다.
         errors.append(_safe(exc))
-        _finish(state_path, data, now, errors, dry_run)
+        _finish(state_path, data, now, errors, dry_run, notifier)
         _report(now, len(old_tickets), 0, [], [], dry_run, errors)
         return 0
 
@@ -155,7 +160,8 @@ def run(cfg, token, now, dry_run=False):
 
     data["tickets"] = {**old_tickets, **tickets}
     data["qa_candidates"] = {**(data.get("qa_candidates") or {}), **qa_added}
-    _finish(state_path, data, now, errors, dry_run)
+    _finish(state_path, data, now, errors, dry_run, notifier)
+    _notify_events(notifier, data, events, now, dry_run)
 
     no_md = [key for key in keys if not mds[key]]
     _report(now, len(active), len(parked), events, no_md, dry_run, errors)
@@ -514,7 +520,7 @@ def _report(now, active_n, parked_n, events, no_md, dry_run, errors):
 # 마무리
 # ---------------------------------------------------------------------------
 
-def _finish(state_path, data, now, errors, dry_run):
+def _finish(state_path, data, now, errors, dry_run, notifier=None):
     if errors:
         data["consecutive_errors"] = int(data.get("consecutive_errors") or 0) + 1
         data["last_error"] = " | ".join(errors)
@@ -524,30 +530,95 @@ def _finish(state_path, data, now, errors, dry_run):
     data["polled_at"] = now.isoformat()
     data["schema"] = state_mod.SCHEMA
 
+    alert = _error_alert(data, errors, now)
+
     if not dry_run:
         try:
             state_mod.save(state_path, data)
         except OSError as exc:
             print(f"  상태 저장 실패: {_safe(exc)}", file=sys.stderr)
 
-    if data["consecutive_errors"] >= ERROR_THRESHOLD:
-        _notify(f"폴링 {data['consecutive_errors']}회 연속 실패")
+    if alert:
+        _deliver(notifier, alert, None, dry_run)
 
 
-def _notify(message):
-    body = message.replace('"', "'")
+def _error_alert(data, errors, now):
+    """3회 연속 실패에 딱 한 번. 보낼 본문 아니면 None.
+
+    래치를 저장 **전에** 세워, 발송 성공 여부와 무관하게 다음 실행이 같은
+    장애로 다시 울리지 않게 한다. 도배보다 한 번의 유실이 낫다.
+    """
+    count = int(data.get("consecutive_errors") or 0)
+    if count < ERROR_THRESHOLD:
+        data[NOTIFIED_KEY] = None
+        return None
+    if data.get(NOTIFIED_KEY):
+        return None
+    data[NOTIFIED_KEY] = now.isoformat()
+    reason = _oneline(data.get("last_error") or (errors[0] if errors else ""))
+    return f"{ERROR_HEADLINE.format(n=count)}\n{reason or '원인 미상'}"
+
+
+# ---------------------------------------------------------------------------
+# 알림
+# ---------------------------------------------------------------------------
+
+def _build_notifier(cfg):
+    """`[notify]` 가 비어 있으면 기존 macOS 알림으로 내려간다."""
+    settings = getattr(cfg, "notify", None)
+    channel = ""
+    if isinstance(settings, dict):
+        channel = str(settings.get("channel") or "").strip()
+    if not channel:
+        return notify_mod.OsascriptNotifier(NOTIFY_TITLE)
+    return notify_mod.build(cfg)
+
+
+def _notify_events(notifier, data, events, now, dry_run):
+    """오늘 브리핑 스레드에 한 건으로 묶어 답글.
+
+    브리핑 ts 가 없거나 어제 것이면 보내지 않는다. 폴링이 독자적으로 루트
+    메시지를 만들면 하루에 스레드가 여러 개 생긴다.
+    """
+    if not events:
+        return
+    slack = data.get(SLACK_KEY)
+    if not isinstance(slack, dict):
+        return
+    ts = str(slack.get("ts") or "").strip()
+    if not ts or str(slack.get("date") or "") != f"{now:%Y-%m-%d}":
+        return
+    _deliver(notifier, "\n".join(_slack_line(e, now) for e in events), ts, dry_run)
+
+
+def _slack_line(event, now):
+    mark = "⚠️ " if event.attention else ""
+    return f"`{now:%H:%M}` {mark}{event.ticket} {_mrkdwn(event.text)}".rstrip()
+
+
+def _mrkdwn(text):
+    """마크다운 `**bold**` 를 Slack mrkdwn `*bold*` 로."""
+    return str(text).replace("**", "*")
+
+
+def _deliver(notifier, text, thread_ts, dry_run):
+    """알림 실패가 폴링을 죽이지 않는다. dry-run 은 절대 발송하지 않는다."""
+    if dry_run:
+        where = f"thread {thread_ts}" if thread_ts else "new message"
+        print(f"[dry-run] 알림({where}):")
+        for line in text.split("\n"):
+            print(f"    {line}")
+        return
+    if notifier is None:
+        return
     try:
-        subprocess.run(
-            [
-                "osascript",
-                "-e",
-                f'display notification "{body}" with title "{NOTIFY_TITLE}"',
-            ],
-            check=False,
-            capture_output=True,
-        )
-    except OSError:
-        pass
+        notifier.send(text, thread_ts=thread_ts)
+    except Exception as exc:
+        print(f"  알림 발송 실패: {_safe(exc)}", file=sys.stderr)
+
+
+def _oneline(text):
+    return str(text).replace("\n", " ").strip()
 
 
 def _safe(exc):

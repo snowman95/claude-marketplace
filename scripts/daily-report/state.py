@@ -8,9 +8,16 @@ import json
 import os
 import tempfile
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 SCHEMA = 1
+
+KST = timezone(timedelta(hours=9))
+
+# Figma API 의 lastModified 는 편집이 없어도 초 단위로 흔들린다.
+# 이 폭 미만의 차이는 변경으로 보지 않는다.
+FIGMA_TOLERANCE = timedelta(seconds=60)
 
 _KIND_NEW = "new"
 _KIND_STATUS = "status"
@@ -110,16 +117,45 @@ def diff_ticket(old: dict | None, new: dict) -> list[Event]:
         new_ts = new_figma[file_key]
         if not old_ts or not new_ts or old_ts == new_ts:
             continue
+        if not _figma_changed(old_ts, new_ts):
+            continue
         events.append(
             Event(
                 key,
                 _KIND_FIGMA,
-                f"**Figma** `{file_key}` {str(old_ts)[:10]} → {str(new_ts)[:10]}",
+                f"**Figma** `{file_key}` {_fmt_ts(old_ts)} → {_fmt_ts(new_ts)}",
                 True,
             )
         )
 
     return events
+
+
+def _parse_ts(value) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.strip())
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)  # Figma 는 UTC 로 준다
+    return parsed
+
+
+def _figma_changed(old_ts, new_ts) -> bool:
+    old_dt = _parse_ts(old_ts)
+    new_dt = _parse_ts(new_ts)
+    if old_dt is None or new_dt is None:
+        return True  # 문자열 비교 폴백. 여기 오면 이미 다른 값이다
+    return abs(new_dt - old_dt) >= FIGMA_TOLERANCE
+
+
+def _fmt_ts(value) -> str:
+    parsed = _parse_ts(value)
+    if parsed is None:
+        return str(value)[:16]
+    return parsed.astimezone(KST).strftime("%m-%d %H:%M")
 
 
 def _read_json(path: Path) -> dict | None:
