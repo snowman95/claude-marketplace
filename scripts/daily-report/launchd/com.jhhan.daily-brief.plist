@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.daily-report.daily-brief</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>HOME_DIR/.local/bin/claude</string>
+    <string>-p</string>
+    <string>/daily-brief</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Minute</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Weekday</key><integer>1</integer></dict>
+    <dict><key>Minute</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Weekday</key><integer>2</integer></dict>
+    <dict><key>Minute</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Weekday</key><integer>3</integer></dict>
+    <dict><key>Minute</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Weekday</key><integer>4</integer></dict>
+    <dict><key>Minute</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Weekday</key><integer>5</integer></dict>
+  </array>
+  <key>StandardOutPath</key><string>HOME_DIR/.local/log/daily-report/brief.log</string>
+  <key>StandardErrorPath</key><string>HOME_DIR/.local/log/daily-report/brief.err</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>

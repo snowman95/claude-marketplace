@@ -10,6 +10,8 @@
     "./skills/workflow/ticket-review",
     "./skills/workflow/ticket-quiz",
     "./skills/workflow/docs-pull",
+    "./skills/workflow/ticket-links",
+    "./skills/workflow/daily-brief",
     "./skills/productivity/render-html",
     "./skills/productivity/worktree",
     "./skills/productivity/md-to-slides",

@@ -1,0 +1,10 @@
+vault = "~/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects"
+site = "your-site.atlassian.net"
+email = "you@example.com"
+parked_statuses = ["Ready to Deploy"]
+qa_projects = ["WPQ", "WV2Q"]
+qa_lookback_days = 7
+repos = [
+  "~/Documents/GitHub/myproject",
+  "~/Documents/GitHub/myproject_ds",
+]

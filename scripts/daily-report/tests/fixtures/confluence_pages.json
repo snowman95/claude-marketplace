@@ -1,0 +1,17 @@
+{
+  "results": [
+    {
+      "id": "5919834330",
+      "status": "current",
+      "title": "쇼핑 3.3.0 기획서",
+      "version": {"number": 13, "createdAt": "2026-08-28T02:11:00.000Z"}
+    },
+    {
+      "id": "5919834331",
+      "status": "current",
+      "title": "쿠폰 정책",
+      "version": {"number": 2, "createdAt": "2026-08-20T05:00:00.000Z"}
+    }
+  ],
+  "_links": {}
+}
