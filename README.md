@@ -53,6 +53,29 @@ Claude Code 안에서는 `claude plugin` 대신 `/plugin` 슬래시 명령으로
 
 ---
 
+## Repository 구조
+
+스킬 본문은 canonical 위치(`skills/`)에 두고, Claude 플러그인은 이를 얇게 참조합니다.
+
+```
+claude-marketplace/
+├── skills/                    # canonical SKILL.md
+│   ├── workflow/              # ticket-workflow, ticket-pull, ...
+│   ├── productivity/          # md-to-slides, quiz-me, ...
+│   └── setup/                 # statusline-setup, cursor-statusline-setup, ...
+├── scripts/                   # 공유 실행 파일 (statusline.sh 등)
+├── plugins/                   # Claude marketplace thin bundle (스킬 경로만 참조)
+│   ├── ticket-workflow/.claude-plugin/plugin.json
+│   ├── setup/.claude-plugin/plugin.json
+│   └── ...
+└── .claude-plugin/marketplace.json
+```
+
+- **Claude**: `claude plugin install <name>@snowman95-marketplace` → `plugins/*` 번들
+- **hooks/agents** (추후): `platforms/claude/` 아래 Claude 전용으로 추가
+
+---
+
 ## 개념 정리
 
 ### Marketplace ≠ Plugin
@@ -182,12 +205,12 @@ claude plugin update mattpocock-skills
 ### 1. 디렉토리 구조 만들기
 
 ```
+skills/{domain}/my-skill/
+└── SKILL.md
+
 plugins/my-plugin/
-├── .claude-plugin/
-│   └── plugin.json
-└── skills/
-    └── my-skill/
-        └── SKILL.md
+└── .claude-plugin/
+    └── plugin.json    # ../../skills/{domain}/my-skill 참조
 ```
 
 ### 2. `plugins/my-plugin/.claude-plugin/plugin.json`
@@ -197,11 +220,11 @@ plugins/my-plugin/
   "name": "my-plugin",
   "version": "0.1.0",
   "description": "...",
-  "skills": ["./skills/my-skill"]
+  "skills": ["../../skills/workflow/my-skill"]
 }
 ```
 
-### 3. `plugins/my-plugin/skills/my-skill/SKILL.md`
+### 3. `skills/workflow/my-skill/SKILL.md`
 
 ```markdown
 ---

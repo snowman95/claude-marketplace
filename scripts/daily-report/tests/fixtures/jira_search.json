@@ -1,0 +1,31 @@
+{
+  "startAt": 0,
+  "maxResults": 100,
+  "total": 2,
+  "issues": [
+    {
+      "id": "1000001",
+      "key": "CWEB-1547",
+      "fields": {
+        "summary": "장바구니 쿠폰 최대 할인 노출",
+        "status": {
+          "name": "진행 중",
+          "statusCategory": {"name": "In Progress"}
+        },
+        "updated": "2026-09-02T18:22:00.000+0900"
+      }
+    },
+    {
+      "id": "1000002",
+      "key": "CWEB-1548",
+      "fields": {
+        "summary": "배송비 환불 금액 노출 수정",
+        "status": {
+          "name": "Ready to Deploy",
+          "statusCategory": {"name": "In Progress"}
+        },
+        "updated": "2026-09-03T09:10:00.000+0900"
+      }
+    }
+  ]
+}

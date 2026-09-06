@@ -7,14 +7,13 @@
   },
   "plugins": [
     {
-      "name": "ticket-workflow",
-      "description": "Non-trivial implementation workflow: Phase 0~5 (context loading → research → plan → annotation cycle → checklist → implementation). Jira-ticket-based by default, supports generic mode without a ticket.",
+      "name": "snowman95-marketplace",
+      "description": "ticket-workflow, md-to-slides, quiz-me, find-unknowns, setup utilities 등 개인 스킬 모음",
       "author": {
         "name": "snowman95"
       },
       "category": "productivity",
-      "source": "./plugins/ticket-workflow",
-      "homepage": "https://github.com/snowman95/claude-marketplace/tree/main/plugins/ticket-workflow"
+      "source": "./"
     },
     {
       "name": "mattpocock-skills",

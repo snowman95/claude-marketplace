@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.daily-report.daily-poll</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Library/Frameworks/Python.framework/Versions/3.13/bin/python3</string>
+    <string>PLUGIN_ROOT/scripts/daily-report/poll.py</string>
+  </array>
+  <key>StartCalendarInterval</key>
+  <array>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>8</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>9</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>10</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>11</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>12</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>13</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>14</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>15</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>16</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>17</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>18</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>19</integer></dict>
+    <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>20</integer></dict>
+  </array>
+  <key>StandardOutPath</key><string>HOME_DIR/.local/log/daily-report/poll.log</string>
+  <key>StandardErrorPath</key><string>HOME_DIR/.local/log/daily-report/poll.err</string>
+  <key>RunAtLoad</key><false/>
+</dict>
+</plist>

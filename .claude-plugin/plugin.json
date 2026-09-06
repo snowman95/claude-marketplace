@@ -1,0 +1,26 @@
+{
+  "name": "snowman95-marketplace",
+  "version": "1.0.0",
+  "description": "Personal Claude Code marketplace for skills and plugins shared across machines",
+  "skills": [
+    "./skills/workflow/ticket-workflow",
+    "./skills/workflow/ticket-pull",
+    "./skills/workflow/ticket-pull-all",
+    "./skills/workflow/ticket-commit",
+    "./skills/workflow/ticket-review",
+    "./skills/workflow/ticket-quiz",
+    "./skills/workflow/docs-pull",
+    "./skills/workflow/ticket-links",
+    "./skills/workflow/ticket-advance",
+    "./skills/workflow/daily-brief",
+    "./skills/productivity/render-html",
+    "./skills/productivity/worktree",
+    "./skills/productivity/md-to-slides",
+    "./skills/productivity/find-unknowns",
+    "./skills/setup/setup-atlassian-mcp",
+    "./skills/setup/statusline-setup",
+    "./skills/setup/cursor-statusline-setup",
+    "./skills/setup/setup-lsp",
+    "./skills/setup/setup-statusline"
+  ]
+}
