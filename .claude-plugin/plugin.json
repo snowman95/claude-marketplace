@@ -1,6 +1,6 @@
 {
   "name": "snowman95-marketplace",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Personal Claude Code marketplace for skills and plugins shared across machines",
   "skills": [
     "./skills/workflow/ticket-workflow",
