@@ -17,6 +17,7 @@
     "./skills/productivity/worktree",
     "./skills/productivity/md-to-slides",
     "./skills/productivity/find-unknowns",
+    "./skills/productivity/claude-usage",
     "./skills/setup/setup-atlassian-mcp",
     "./skills/setup/statusline-setup",
     "./skills/setup/cursor-statusline-setup",
