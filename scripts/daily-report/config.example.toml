@@ -1,6 +1,8 @@
 # daily-report 설정 템플릿.
 #
-#   cp config.example.toml config.toml
+# 권장: ~/.config/atlassian/daily-report.toml 에 두세요 — 플러그인이 갱신되어도
+# 이 경로는 유지됩니다. 플러그인 디렉토리 옆 config.toml 도 동작하지만 갱신 시
+# 유실됩니다. $DAILY_REPORT_CONFIG 환경변수로 경로를 명시할 수도 있습니다.
 #
 # `config.toml` 은 gitignore 대상이다 — 개인 값은 커밋되지 않는다.
 #

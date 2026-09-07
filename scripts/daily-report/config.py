@@ -3,6 +3,10 @@
 Tokens are read here and nowhere else. They are never printed, logged, or put
 into exception messages.
 
+설정 파일을 찾는 순서: ① $DAILY_REPORT_CONFIG 환경변수 ②
+~/.config/atlassian/daily-report.toml (권장 — 플러그인 갱신 시 유실되지 않음)
+③ 스크립트 옆 config.toml (기존 동작, 하위 호환).
+
 `config.toml` 은 공개 저장소에 커밋되지 않는다(gitignore). 그래도 개인 값
 (site·email·slack_target)은 config 에 없어도 되게 두고, 없으면 env 파일에서
 읽는다 — 커밋 가능한 `config.example.toml` 만으로 동작하게 하려는 것이다.
@@ -13,7 +17,11 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
+# 플러그인 디렉토리 옆 config.toml (gitignore 대상, 하위 호환용 3번째 후보)
 DEFAULT_CONFIG = Path(__file__).resolve().with_name("config.toml")
+# 권장 경로: 플러그인 갱신 시 유실되지 않는 영구 위치
+_XDG_CONFIG = Path("~/.config/atlassian/daily-report.toml").expanduser()
+
 ENV_FILE = Path("~/.config/atlassian/daily-track.env").expanduser()
 CONFIG_FILE = Path("~/.config/atlassian/config").expanduser()
 CLAUDE_JSON = Path("~/.claude.json").expanduser()
@@ -46,9 +54,46 @@ def _path(value: str) -> Path:
     return Path(str(value)).expanduser()
 
 
+def resolve_config_path(explicit: Path | None) -> Path:
+    """설정 파일 경로를 아래 순서로 결정한다.
+
+    1. ``explicit`` — 호출자가 명시적으로 전달한 경로
+    2. ``$DAILY_REPORT_CONFIG`` 환경변수
+    3. ``~/.config/atlassian/daily-report.toml`` (플러그인 갱신에도 유지)
+    4. 스크립트 옆 ``config.toml`` (기존 동작, 하위 호환)
+
+    하나도 존재하지 않으면 모든 후보를 메시지에 담아 FileNotFoundError 를 던진다.
+    """
+    tried: list[Path] = []
+
+    if explicit is not None:
+        p = Path(explicit).expanduser()
+        tried.append(p)
+        if p.exists():
+            return p
+
+    env = os.environ.get("DAILY_REPORT_CONFIG")
+    if env:
+        p = Path(env).expanduser()
+        tried.append(p)
+        if p.exists():
+            return p
+
+    for p in (_XDG_CONFIG, DEFAULT_CONFIG):
+        if p not in tried:
+            tried.append(p)
+        if p.exists():
+            return p
+
+    raise FileNotFoundError(
+        "daily-report 설정 파일을 찾을 수 없습니다. 아래 중 하나에 두세요:\n"
+        + "\n".join(f"  {c}" for c in tried)
+    )
+
+
 def load_config(path: Path | None = None) -> Config:
-    path = Path(path) if path is not None else DEFAULT_CONFIG
-    with open(path, "rb") as f:
+    resolved = resolve_config_path(Path(path) if path is not None else None)
+    with open(resolved, "rb") as f:
         raw = tomllib.load(f)
     return Config(
         vault=_path(raw["vault"]),
