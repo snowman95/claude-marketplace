@@ -1098,7 +1098,7 @@ def test_w8_threshold_is_configurable():
 # W9 PR 적체 — 조립 도우미
 # ---------------------------------------------------------------------------
 
-def pr(number=101, repo="weverse/web_weverseshop", age=8,
+def pr(number=101, repo="weverse/myproject", age=8,
        title="CWEB-1547 쿠폰 할인 표시", branch="features/CWEB-1547",
        draft=False, mergeable="MERGEABLE", review="REVIEW_REQUIRED",
        commit_age=1, review_age=None, today=TODAY):

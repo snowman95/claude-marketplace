@@ -18,7 +18,7 @@ import github
 from github import PullRequest
 
 TODAY = date(2026, 9, 9)
-SLUG = "weverse/web_weverseshop"
+SLUG = "weverse/myproject"
 
 
 # ---------------------------------------------------------------------------
@@ -152,11 +152,11 @@ def test_pull_request_review_at_defaults_to_none():
 @pytest.mark.parametrize(
     "url,expected",
     [
-        ("https://github.com/weverse/web_weverseshop.git", "weverse/web_weverseshop"),
-        ("https://github.com/weverse/web_weverseshop", "weverse/web_weverseshop"),
-        ("git@github.com:weverse/web_weverseshop.git", "weverse/web_weverseshop"),
-        ("ssh://git@github.com/weverse/web_weverseshop.git", "weverse/web_weverseshop"),
-        ("https://github.com/weverse/web_weverseshop/", "weverse/web_weverseshop"),
+        ("https://github.com/weverse/myproject.git", "weverse/myproject"),
+        ("https://github.com/weverse/myproject", "weverse/myproject"),
+        ("git@github.com:weverse/myproject.git", "weverse/myproject"),
+        ("ssh://git@github.com/weverse/myproject.git", "weverse/myproject"),
+        ("https://github.com/weverse/myproject/", "weverse/myproject"),
         ("  https://github.com/weverse/shop.git  \n", "weverse/shop"),
         ("git@github.enterprise.co.kr:team/repo.git", "team/repo"),
     ],

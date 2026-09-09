@@ -493,7 +493,7 @@ def test_watch_failure_does_not_count_as_an_api_error(rig, monkeypatch, capsys):
 # PR 조회 배선 (W9)
 # ---------------------------------------------------------------------------
 
-def pull_request(number=101, repo="weverse/web_weverseshop", age=35, **over):
+def pull_request(number=101, repo="weverse/myproject", age=35, **over):
     fields = {
         "repo": repo,
         "number": number,
@@ -518,7 +518,7 @@ def test_pull_requests_reach_the_watch_layer(rig, capsys):
 
     w9 = [line for line in capsys.readouterr().out.splitlines() if "W9" in line]
     assert len(w9) == 1
-    assert "[weverse/web_weverseshop#101]" in w9[0]
+    assert "[weverse/myproject#101]" in w9[0]
     assert "35일" in w9[0]
 
 
@@ -528,7 +528,7 @@ def test_pr_alerts_are_recorded_in_the_watch_state(rig):
 
     rig.run()
 
-    assert rig.state()["watch"]["weverse/web_weverseshop#101"] == {"W9a": FRIDAY}
+    assert rig.state()["watch"]["weverse/myproject#101"] == {"W9a": FRIDAY}
 
 
 def test_pr_query_gets_the_polling_date(rig):
@@ -541,38 +541,38 @@ def test_slugs_come_from_the_configured_repos(rig):
     """설정 키를 새로 만들지 않는다 — `repos` 에서 origin 을 읽어 유도한다."""
     rig.with_repos("/repos/shop", "/repos/admin")
     rig.github.remotes = {
-        "/repos/shop": "weverse/web_weverseshop",
+        "/repos/shop": "weverse/myproject",
         "/repos/admin": "weverse/admin",
     }
     rig.jira.active = [issue("CWEB-1547")]
 
     rig.run()
 
-    assert rig.github.slugs == ["weverse/web_weverseshop", "weverse/admin"]
+    assert rig.github.slugs == ["weverse/myproject", "weverse/admin"]
 
 
 def test_repos_without_an_origin_are_skipped(rig):
     rig.with_repos("/repos/shop", "/repos/local-only")
-    rig.github.remotes = {"/repos/shop": "weverse/web_weverseshop"}
+    rig.github.remotes = {"/repos/shop": "weverse/myproject"}
     rig.jira.active = [issue("CWEB-1547")]
 
     rig.run()
 
-    assert rig.github.slugs == ["weverse/web_weverseshop"]
+    assert rig.github.slugs == ["weverse/myproject"]
 
 
 def test_duplicate_slugs_are_queried_once(rig):
     """워크트리 두 개가 같은 origin 을 가리킨다. 같은 PR 을 두 줄로 내지 않는다."""
     rig.with_repos("/repos/shop", "/repos/shop-worktree")
     rig.github.remotes = {
-        "/repos/shop": "weverse/web_weverseshop",
-        "/repos/shop-worktree": "weverse/web_weverseshop",
+        "/repos/shop": "weverse/myproject",
+        "/repos/shop-worktree": "weverse/myproject",
     }
     rig.jira.active = [issue("CWEB-1547")]
 
     rig.run()
 
-    assert rig.github.slugs == ["weverse/web_weverseshop"]
+    assert rig.github.slugs == ["weverse/myproject"]
 
 
 def test_no_repos_means_no_slugs(rig):
