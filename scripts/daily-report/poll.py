@@ -25,6 +25,7 @@ from datetime import date as date_cls, datetime, timedelta, timezone
 from pathlib import Path
 
 import decisions as decisions_mod
+import github as github_mod
 import heartbeat as heartbeat_mod
 import notify as notify_mod
 import releases as releases_mod
@@ -825,8 +826,9 @@ def _watch(cfg, data, tickets, parked, index, now):
         mds = {key: vault_mod.primary_mds(key, index.get(key, [])) for key in entries}
         table = releases_mod.load_releases(cfg.daily_dir / releases_mod.RELEASES_NAME)
         today = now.date()
+        prs = _pull_requests(cfg, today)
 
-        alerts = watch_mod.evaluate(entries, table, today, cfg, mds)
+        alerts = watch_mod.evaluate(entries, table, today, cfg, mds, prs)
         seen = data.get(WATCH_KEY)
         fresh, folded = watch_mod.partition(alerts, seen, today)
         data[WATCH_KEY] = watch_mod.update_seen(seen, alerts, today)
@@ -834,6 +836,35 @@ def _watch(cfg, data, tickets, parked, index, now):
     except Exception as exc:
         print(f"  감시 평가 실패: {_safe(exc)}", file=sys.stderr)
         return [], []
+
+
+def _pull_requests(cfg, today):
+    """PR 조회를 따로 감싼다. **여기서 실패해도 W1~W8 은 계산돼야 한다.**
+
+    `github.list_open_prs` 는 스스로 예외를 삼키지만, 그 계약이 깨지는 날
+    감시 계층 전체가 조용해지는 것은 너무 큰 대가다. 못 보던 것 하나를
+    얻으려고 보던 여덟 개를 잃지 않는다.
+    """
+    try:
+        return github_mod.list_open_prs(_repo_slugs(cfg), today)
+    except Exception as exc:
+        print(f"  PR 조회 실패: {_safe(exc)}", file=sys.stderr)
+        return []
+
+
+def _repo_slugs(cfg):
+    """`repos`(로컬 경로) → GitHub "owner/name". 새 설정 키를 만들지 않는다.
+
+    슬러그를 따로 받으면 로컬 경로 목록과 두 곳이 되고, 리포가 하나 늘 때 한쪽만
+    고쳐진다. `repos` 가 비어 있으면 `gh` 를 아예 부르지 않는다 — 감시할 대상이
+    없는데 네트워크를 타고 실패 한 줄을 남길 이유가 없다.
+    """
+    slugs = []
+    for path in getattr(cfg, "repos", None) or []:
+        slug = github_mod.repo_slug(path)
+        if slug and slug not in slugs:
+            slugs.append(slug)
+    return slugs
 
 
 def _parked_entries(issues, index):

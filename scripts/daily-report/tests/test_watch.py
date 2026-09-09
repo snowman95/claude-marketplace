@@ -13,6 +13,7 @@ from datetime import date, timedelta
 import pytest
 
 import watch
+from github import PullRequest
 from releases import Release
 from watch import DEFAULTS, Alert
 
@@ -99,8 +100,10 @@ def one(alerts, rule):
     return found[0]
 
 
-def run(tickets=None, releases=None, today=TODAY, cfg=None, mds=None):
-    return watch.evaluate(tickets or {}, releases or {}, today, cfg or {}, mds or {})
+def run(tickets=None, releases=None, today=TODAY, cfg=None, mds=None, prs=None):
+    return watch.evaluate(
+        tickets or {}, releases or {}, today, cfg or {}, mds or {}, prs or ()
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -128,7 +131,7 @@ def test_alert_tickets_defaults_to_empty_tuple():
     assert Alert("W1", "s", "red", "t", 1).tickets == ()
 
 
-def test_defaults_are_the_documented_eight():
+def test_defaults_are_the_documented_thresholds():
     assert DEFAULTS == {
         "deploy_soon_days": 3,
         "deploy_stale_days": 30,
@@ -138,6 +141,9 @@ def test_defaults_are_the_documented_eight():
         "blocked_long_days": 7,
         "ticket_stale_days": 14,
         "parked_stale_days": 30,
+        "pr_stale_days": 14,
+        "pr_abandon_days": 100,
+        "qa_soon_days": 5,
     }
 
 
@@ -533,8 +539,9 @@ def test_w2_zero_threshold_only_fires_on_the_day():
 # W3 QA 시작 경과
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("delta,fires", [(-1, False), (0, True), (1, True), (5, True)])
+@pytest.mark.parametrize("delta,fires", [(-1, False), (0, False), (1, True), (5, True)])
 def test_w3_boundary(delta, fires):
+    """`delta == 0`(QA 시작이 오늘)은 경과가 아니라 임박이다 — W10 이 맡는다."""
     tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
     releases = rel_map(release("shop", "3.3.0", qa=TODAY - timedelta(days=delta)))
 
@@ -1085,6 +1092,437 @@ def test_w8_and_w7_do_not_double_up():
 def test_w8_threshold_is_configurable():
     tickets = {"CWEB-1": ticket(status="Ready to Deploy", parked=True, updated_days=40)}
     assert only(run(tickets, cfg={"watch": {"parked_stale_days": 60}}), "W8") == []
+
+
+# ---------------------------------------------------------------------------
+# W9 PR 적체 — 조립 도우미
+# ---------------------------------------------------------------------------
+
+def pr(number=101, repo="weverse/web_weverseshop", age=8,
+       title="CWEB-1547 쿠폰 할인 표시", branch="features/CWEB-1547",
+       draft=False, mergeable="MERGEABLE", review="REVIEW_REQUIRED",
+       commit_age=1, review_age=None, today=TODAY):
+    return PullRequest(
+        repo=repo,
+        number=number,
+        title=title,
+        branch=branch,
+        created=today - timedelta(days=age),
+        draft=draft,
+        mergeable=mergeable,
+        review=review,
+        last_commit=None if commit_age is None else today - timedelta(days=commit_age),
+        review_at=None if review_age is None else today - timedelta(days=review_age),
+    )
+
+
+def w9(prs, **kwargs):
+    return [a for a in run(prs=prs, **kwargs) if a.rule.startswith("W9")]
+
+
+# ---------------------------------------------------------------------------
+# W9 — 100일 상한
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("age,fires", [(99, True), (100, True), (101, False), (449, False)])
+def test_w9_abandon_cap_drops_the_oldest(age, fires):
+    """100일 넘은 것은 진행 중단이다. 등급 강하가 아니라 완전 제외다."""
+    assert bool(w9([pr(age=age)])) is fires
+
+
+@pytest.mark.parametrize("age,fires", [(100, True), (101, False)])
+def test_w9_abandon_cap_beats_a_conflict(age, fires):
+    """🔴 조건이어도 상한을 넘으면 나오지 않는다."""
+    assert bool(w9([pr(age=age, mergeable="CONFLICTING")])) is fires
+
+
+def test_w9_abandon_cap_beats_every_subrule():
+    stuck = pr(age=200, title="제목만", branch="feature/x",
+               mergeable="CONFLICTING", review="CHANGES_REQUESTED",
+               commit_age=9, review_age=3)
+    assert w9([stuck]) == []
+
+
+def test_w9_abandon_cap_is_configurable():
+    cfg = {"watch": {"pr_abandon_days": 40}}
+    assert w9([pr(age=35)], cfg=cfg)
+    assert w9([pr(age=41)], cfg=cfg) == []
+
+
+def test_w9_measured_backlog_keeps_only_the_recent_ones():
+    """실측: 449·421·384·383일 4건은 빠지고 33~35일 4건과 8일 1건만 남는다."""
+    ages = [384, 383, 35, 35, 1, 449, 421, 33, 33, 8, 0]
+    prs = [pr(number=i, age=age) for i, age in enumerate(ages)]
+    assert {a.days for a in w9(prs)} == {35, 33}
+
+
+# ---------------------------------------------------------------------------
+# W9a 정체
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("age,fires", [(13, False), (14, True), (35, True)])
+def test_w9a_boundary(age, fires):
+    alerts = only(run(prs=[pr(age=age)]), "W9a")
+    assert bool(alerts) is fires
+    if fires:
+        assert alerts[0].level == "yellow"
+        assert alerts[0].days == age
+
+
+def test_w9a_threshold_is_configurable():
+    cfg = {"watch": {"pr_stale_days": 30}}
+    assert only(run(prs=[pr(age=20)], cfg=cfg), "W9a") == []
+    assert only(run(prs=[pr(age=30)], cfg=cfg), "W9a")
+
+
+def test_w9a_subject_is_repo_and_number():
+    alert = one(run(prs=[pr(repo="weverse/admin", number=1787, age=20)]), "W9a")
+    assert alert.subject == "weverse/admin#1787"
+    assert "[weverse/admin#1787]" in alert.text
+
+
+def test_w9a_text_carries_the_day_count_and_title():
+    alert = one(run(prs=[pr(age=35, title="CWEB-1547 쿠폰")]), "W9a")
+    assert "35일" in alert.text
+    assert "CWEB-1547 쿠폰" in alert.text
+    assert alert.text.startswith("🟡 W9a ")
+
+
+def test_w9_alert_is_not_ticket_scoped():
+    """PR 경보의 subject 는 티켓이 아니다. 티켓 목록을 채우면 집계가 섞인다."""
+    assert one(run(prs=[pr(age=20)]), "W9a").tickets == ()
+
+
+def test_w9_long_title_is_truncated():
+    alert = one(run(prs=[pr(age=20, title="CWEB-1 " + "가" * 200)]), "W9a")
+    assert len(alert.text) < 160
+
+
+# ---------------------------------------------------------------------------
+# W9b 충돌
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "mergeable,fires",
+    [("CONFLICTING", True), ("MERGEABLE", False), ("UNKNOWN", False), ("", False)],
+)
+def test_w9b_only_fires_on_a_conflict(mergeable, fires):
+    """`UNKNOWN` 은 GitHub 가 아직 계산 중이라는 뜻이다. 모르는 것은 경보가 아니다."""
+    alerts = only(run(prs=[pr(mergeable=mergeable)]), "W9b")
+    assert bool(alerts) is fires
+
+
+def test_w9b_is_red_regardless_of_age():
+    alert = one(run(prs=[pr(age=1, mergeable="CONFLICTING")]), "W9b")
+    assert alert.level == "red"
+    assert alert.days == 1
+
+
+def test_w9b_is_case_insensitive():
+    assert only(run(prs=[pr(mergeable="conflicting")]), "W9b")
+
+
+def test_w9b_never_folds():
+    """🔴 는 개별 표시된다 — 충돌은 오늘 손대야 하는 일이다."""
+    alerts = run(prs=[pr(mergeable="CONFLICTING")])
+    seen = watch.update_seen({}, alerts, TODAY)
+    fresh, folded = watch.partition(alerts, seen, TODAY + timedelta(days=1))
+    assert [a.rule for a in fresh] == ["W9b"]
+    assert folded == []
+
+
+# ---------------------------------------------------------------------------
+# W9c 변경요청 방치
+# ---------------------------------------------------------------------------
+
+def test_w9c_fires_when_no_commit_followed_the_request():
+    alert = one(run(prs=[pr(review="CHANGES_REQUESTED", commit_age=9, review_age=3)]), "W9c")
+    assert alert.level == "yellow"
+
+
+def test_w9c_is_silent_when_a_commit_followed_the_request():
+    prs = [pr(review="CHANGES_REQUESTED", commit_age=1, review_age=3)]
+    assert only(run(prs=prs), "W9c") == []
+
+
+def test_w9c_counts_a_same_day_commit_as_not_addressed():
+    """날짜만 알기 때문에 같은 날은 순서를 모른다. 모를 때는 방치로 두고 사람이 본다."""
+    prs = [pr(review="CHANGES_REQUESTED", commit_age=3, review_age=3)]
+    assert only(run(prs=prs), "W9c")
+
+
+def test_w9c_skips_when_the_last_commit_is_unknown():
+    """없는 데이터로 판정하지 않는다."""
+    prs = [pr(review="CHANGES_REQUESTED", commit_age=None, review_age=3)]
+    assert only(run(prs=prs), "W9c") == []
+
+
+def test_w9c_skips_when_the_request_date_is_unknown():
+    prs = [pr(review="CHANGES_REQUESTED", commit_age=9, review_age=None)]
+    assert only(run(prs=prs), "W9c") == []
+
+
+def test_w9c_needs_the_changes_requested_decision():
+    prs = [pr(review="APPROVED", commit_age=9, review_age=3)]
+    assert only(run(prs=prs), "W9c") == []
+
+
+def test_w9c_text_names_the_request_date():
+    alert = one(run(prs=[pr(review="CHANGES_REQUESTED", commit_age=9, review_age=3)]), "W9c")
+    assert (TODAY - timedelta(days=3)).strftime("%m-%d") in alert.text
+
+
+# ---------------------------------------------------------------------------
+# W9d 티켓 없음
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "title,branch,fires",
+    [
+        ("CWEB-1547 쿠폰", "feature/coupon", False),
+        ("쿠폰 계산 수정", "features/CWEB-1547", False),
+        ("쿠폰 계산 수정", "feature/coupon", True),
+        ("WPQ-17676 QA 대응", "hotfix", False),
+        ("WWSP-1820 정리", "x", False),
+        ("WV2Q-53784 대응", "x", False),
+        ("chore: bump deps", "chore/bump", True),
+        ("CWEB- 쿠폰", "feature/cweb", True),
+        ("ABC-123 다른 프로젝트", "feature/abc-123", True),
+    ],
+)
+def test_w9d_looks_at_the_title_and_the_branch(title, branch, fires):
+    alerts = only(run(prs=[pr(title=title, branch=branch)]), "W9d")
+    assert bool(alerts) is fires
+
+
+def test_w9d_key_match_is_case_insensitive():
+    """브랜치를 소문자로 쓰는 사람이 있다. 표기 때문에 울리면 규칙을 끄게 된다."""
+    assert only(run(prs=[pr(title="쿠폰", branch="fix/cweb-1547")]), "W9d") == []
+
+
+def test_w9d_is_yellow():
+    alert = one(run(prs=[pr(title="쿠폰", branch="x")]), "W9d")
+    assert alert.level == "yellow"
+
+
+def test_w9d_fires_below_the_stale_threshold():
+    """정체와 무관한 규칙이다. 어제 만든 PR 도 티켓이 없으면 없는 것이다."""
+    assert only(run(prs=[pr(age=1, title="쿠폰", branch="x")]), "W9d")
+
+
+# ---------------------------------------------------------------------------
+# W9 우선순위 — 한 PR 에 한 줄
+# ---------------------------------------------------------------------------
+
+def test_w9_priority_keeps_only_the_worst():
+    """b·c·a·d 에 다 걸려도 🔴 하나만 남는다. 한 PR 이 네 줄을 먹으면 안 읽힌다."""
+    everything = pr(age=35, title="제목만", branch="feature/x",
+                    mergeable="CONFLICTING", review="CHANGES_REQUESTED",
+                    commit_age=9, review_age=3)
+    assert [a.rule for a in w9([everything])] == ["W9b"]
+
+
+def test_w9_priority_c_beats_a_and_d():
+    both = pr(age=35, title="제목만", branch="feature/x",
+              review="CHANGES_REQUESTED", commit_age=9, review_age=3)
+    assert [a.rule for a in w9([both])] == ["W9c"]
+
+
+def test_w9_priority_a_beats_d():
+    both = pr(age=35, title="제목만", branch="feature/x")
+    assert [a.rule for a in w9([both])] == ["W9a"]
+
+
+def test_w9_one_alert_per_pull_request():
+    prs = [pr(number=1, age=35), pr(number=2, mergeable="CONFLICTING")]
+    alerts = w9(prs)
+    assert len(alerts) == 2
+    assert len({a.subject for a in alerts}) == 2
+
+
+# ---------------------------------------------------------------------------
+# W9 제외
+# ---------------------------------------------------------------------------
+
+def test_w9_skips_drafts():
+    """드래프트는 아직 리뷰를 요청하지 않은 것이다."""
+    assert w9([pr(age=35, draft=True, mergeable="CONFLICTING")]) == []
+
+
+def test_w9_without_prs():
+    assert run(prs=[]) == []
+    assert run(prs=None) == []
+
+
+def test_w9_ignores_junk_entries():
+    assert w9([None, "nope", 3]) == []
+
+
+def test_w9_ignores_a_pr_without_a_created_date():
+    """날짜를 모르면 경과일을 셀 수 없다. 산수가 안 되면 경보를 만들지 않는다."""
+    broken = PullRequest(
+        "a/b", 7, "제목", "branch", None, False, "CONFLICTING", "", None
+    )
+    assert w9([broken]) == []
+
+
+def test_evaluate_still_works_without_the_pr_argument():
+    """기존 호출자·테스트가 인자 하나를 모른다. 기본값이 그 계약을 지킨다."""
+    assert watch.evaluate({}, {}, TODAY, {}, {}) == []
+
+
+# ---------------------------------------------------------------------------
+# W10 QA 시작 임박
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize(
+    "delta,fires", [(6, False), (5, True), (3, True), (0, True), (-1, False)]
+)
+def test_w10_boundary(delta, fires):
+    """D-6 은 아직 이르고, D+1 은 이미 W3 의 일이다."""
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=delta)))
+
+    alerts = only(run(tickets, releases), "W10")
+    assert bool(alerts) is fires
+    if fires:
+        assert alerts[0].level == "red"
+        assert alerts[0].days == delta
+        assert alerts[0].subject == "shop3.3.0"
+
+
+def test_w10_and_w3_are_mutually_exclusive():
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
+    for delta in (-3, -1, 0, 1, 5):
+        releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=delta)))
+        found = [a.rule for a in run(tickets, releases) if a.rule in ("W3", "W10")]
+        assert len(found) <= 1, (delta, found)
+
+
+def test_w10_takes_over_on_the_day_qa_starts():
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY))
+    assert rules(run(tickets, releases)) == ["W10"]
+
+
+def test_w3_takes_over_the_day_after():
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY - timedelta(days=1)))
+    assert rules(run(tickets, releases)) == ["W3"]
+
+
+def test_w10_threshold_is_configurable():
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=8)))
+    cfg = {"watch": {"qa_soon_days": 10}}
+    assert only(run(tickets, releases, cfg=cfg), "W10")
+    assert only(run(tickets, releases), "W10") == []
+
+
+def test_w10_needs_an_unfinished_ticket():
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0", done=True)}
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=5)))
+    assert run(tickets, releases) == []
+
+
+def test_w10_does_not_count_parked_tickets():
+    """parked 는 개발이 끝난 상태다. QA 를 못 시작할 이유가 아니다."""
+    tickets = {"WPQ-1": ticket(status="Ready to Deploy", parked=True, fix_version="shop3.3.0")}
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=5)))
+    assert only(run(tickets, releases), "W10") == []
+
+
+def test_w10_counts_only_the_developing_tickets():
+    tickets = {
+        "CWEB-1": ticket(fix_version="shop3.3.0"),
+        "CWEB-2": ticket(fix_version="shop3.3.0"),
+        "CWEB-3": ticket(fix_version="shop3.3.0", done=True),
+        "WPQ-9": ticket(status="Ready to Deploy", parked=True, fix_version="shop3.3.0"),
+    }
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=5)))
+
+    alert = one(run(tickets, releases), "W10")
+    assert alert.tickets == ("CWEB-1", "CWEB-2")
+    assert "미완료 2건" in alert.text
+
+
+def test_w10_is_suppressed_when_w1_fires():
+    """배포일이 지난 릴리즈에 QA 임박을 또 얹지 않는다 — 원인이 하나다."""
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
+    releases = rel_map(release(
+        "shop", "3.3.0",
+        qa=TODAY + timedelta(days=2), prod=TODAY - timedelta(days=2),
+    ))
+    assert rules(run(tickets, releases)) == ["W1"]
+
+
+def test_w10_coexists_with_w2():
+    """배포 임박과 QA 임박은 다른 사실이다 (일정이 뒤집힌 릴리즈)."""
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
+    releases = rel_map(release(
+        "shop", "3.3.0",
+        qa=TODAY + timedelta(days=2), prod=TODAY + timedelta(days=1),
+    ))
+    assert rules(run(tickets, releases)) == ["W2", "W10"]
+
+
+def test_w10_needs_a_qa_date():
+    tickets = {"CWEB-1": ticket(fix_version="shop3.3.0")}
+    releases = rel_map(release("shop", "3.3.0", qa=None))
+    assert only(run(tickets, releases), "W10") == []
+
+
+def test_w10_ignores_releases_absent_from_the_table():
+    tickets = {"CWEB-1": ticket(fix_version="shop9.9.9")}
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=2)))
+    assert only(run(tickets, releases), "W10") == []
+
+
+def test_w10_aggregates_one_alert_per_release():
+    tickets = {f"CWEB-{i}": ticket(fix_version="shop3.3.0") for i in range(1, 6)}
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=5)))
+
+    alert = one(run(tickets, releases), "W10")
+    assert len(alert.tickets) == 5
+    assert "CWEB-1 외 4건" in alert.text
+
+
+def test_w10_matches_the_measured_wording():
+    """실측: `🔴 W10 [shop 3.3.0] QA 시작 D-5 (09-14) — 미완료 5건 (CWEB-1547 외 4건)`."""
+    keys = ["CWEB-1547", "CWEB-1548", "CWEB-1549", "CWEB-1550", "CWEB-1551"]
+    tickets = {key: ticket(fix_version="shop3.3.0") for key in keys}
+    releases = rel_map(release("shop", "3.3.0", qa=date(2026, 9, 14)))
+
+    alert = one(run(tickets, releases, today=date(2026, 9, 9)), "W10")
+
+    assert alert.text == (
+        "🔴 W10 [shop 3.3.0] QA 시작 D-5 (09-14) — 미완료 5건 (CWEB-1547 외 4건)"
+    )
+
+
+def test_w10_is_per_release():
+    tickets = {
+        "CWEB-1": ticket(fix_version="shop3.3.0"),
+        "CWEB-2": ticket(fix_version="shop3.4.0"),
+    }
+    releases = rel_map(
+        release("shop", "3.3.0", qa=TODAY + timedelta(days=2)),
+        release("shop", "3.4.0", qa=TODAY + timedelta(days=40)),
+    )
+    alert = one(run(tickets, releases), "W10")
+    assert alert.subject == "shop3.3.0"
+
+
+def test_w10_excluded_tickets_do_not_count(tmp_path):
+    tickets = {
+        "CWEB-1": ticket(fix_version="shop3.3.0"),
+        "CWEB-2": ticket(fix_version="shop3.3.0"),
+    }
+    releases = rel_map(release("shop", "3.3.0", qa=TODAY + timedelta(days=5)))
+    mds = {"CWEB-2": md(tmp_path, "CWEB-2", frontmatter=["watch_ignore: 다음 릴리즈로 이동"])}
+
+    alert = one(run(tickets, releases, mds=mds), "W10")
+    assert alert.tickets == ("CWEB-1",)
 
 
 # ---------------------------------------------------------------------------

@@ -24,6 +24,11 @@
     <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>19</integer></dict>
     <dict><key>Minute</key><integer>7</integer><key>Hour</key><integer>20</integer></dict>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:HOME_DIR/.local/bin</string>
+  </dict>
   <key>StandardOutPath</key><string>HOME_DIR/.local/log/daily-report/poll.log</string>
   <key>StandardErrorPath</key><string>HOME_DIR/.local/log/daily-report/poll.err</string>
   <key>RunAtLoad</key><false/>

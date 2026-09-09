@@ -1,4 +1,4 @@
-"""감시 계층 — 규칙 W1~W8 과 반복 억제.
+"""감시 계층 — 규칙 W1~W10 과 반복 억제.
 
 폴링은 "무엇이 바뀌었나"를 본다. 감시는 **"무엇이 바뀌지 않았나"** 를 본다.
 배포일이 지났는데 티켓이 안 닫혔고, ⚠️ 를 며칠째 안 봤고, 문의가 답이 없는
@@ -12,6 +12,12 @@
   27줄이 된다. 원인이 하나면 알림도 하나다.
 - **`today` 는 주입받는다.** 이 모듈은 시계를 읽지 않는다. 규칙이 전부 날짜
   경계에 걸려 있어서, 시계를 직접 읽으면 재현이 불가능해진다.
+
+- **W9 는 100일 상한을 갖는다.** 449일 열려 있는 PR 은 진행 중단된 것이고,
+  추적해도 오늘 할 일이 생기지 않는다. 등급을 내리는 게 아니라 아예 뺀다 —
+  🔴 로 남겨 두면 접히지 않는 줄이 매일 첫 자리를 먹는다.
+- **한 PR 은 한 줄이다.** 하위 규칙 네 개에 다 걸려도 가장 심각한 것만 낸다.
+  W1 을 티켓마다 뽑아 27줄을 만들었던 실수를 PR 에서 반복하지 않는다.
 
 `watch_ignore` 가 붙은 티켓은 전 규칙에서 빠진다. "방치"와 "의도적 대기"를
 구분하지 못하면 이 계층은 곧 무시당하고, 무시당하는 경보는 없는 것보다 나쁘다.
@@ -36,6 +42,9 @@ DEFAULTS = {
     "blocked_long_days": 7,
     "ticket_stale_days": 14,
     "parked_stale_days": 30,
+    "pr_stale_days": 14,
+    "pr_abandon_days": 100,
+    "qa_soon_days": 5,
 }
 
 RED = "red"
@@ -63,6 +72,16 @@ ITEM_LABEL_RE = re.compile(r"\*\*[^*]+\*\*\s*[:：]")
 DELEGATION_WORDS = ("관리", "참조", "에서 본다")
 
 DONE_CATEGORIES = {"done", "완료"}
+
+# PR 제목·브랜치명에서 찾는 티켓 키. 대소문자를 가리지 않는다 — 브랜치를
+# 소문자로 쓰는 사람이 있고, 표기 때문에 울리는 규칙은 곧 꺼진다.
+TICKET_KEY_RE = re.compile(r"(?:CWEB|WPQ|WWSP|WV2Q)-\d+", re.IGNORECASE)
+
+CONFLICTING = "CONFLICTING"
+CHANGES_REQUESTED = "CHANGES_REQUESTED"
+
+# PR 제목은 길다. 한 줄이 두 줄로 접히면 목록으로 읽히지 않는다.
+TITLE_LIMIT = 60
 
 IGNORE_KEY = "watch_ignore"
 IGNORE_FALSY = {"", "false", "no", "0", "none", "null", "~", "off"}
@@ -97,8 +116,12 @@ class _Row:
 # 진입점
 # ---------------------------------------------------------------------------
 
-def evaluate(tickets, releases, today, cfg, mds) -> list[Alert]:
-    """경보 목록. 입력을 변경하지 않고 예외를 던지지 않는다."""
+def evaluate(tickets, releases, today, cfg, mds, prs=()) -> list[Alert]:
+    """경보 목록. 입력을 변경하지 않고 예외를 던지지 않는다.
+
+    `prs` 는 기본값이 있다. PR 조회는 `gh` 에 의존하므로 없는 환경도 있고,
+    인자를 필수로 만들면 기존 호출자 전부가 PR 없이는 감시를 못 돌린다.
+    """
     rows = []
     for key, entry in _entries(tickets):
         paths = tuple((mds or {}).get(key) or ())
@@ -109,7 +132,10 @@ def evaluate(tickets, releases, today, cfg, mds) -> list[Alert]:
     alerts = _release_alerts(rows, releases or {}, today, cfg)
     for row in rows:
         alerts.extend(_ticket_alerts(row, today, cfg))
-    return sorted(alerts, key=lambda a: (a.rule, _natural(a.subject)))
+    alerts.extend(_pr_alerts(prs, today, cfg))
+    # 규칙 번호도 자연순으로 센다. 문자열 정렬이면 W10 이 W2 앞에 오고, 브리핑을
+    # 읽는 사람은 그 순서를 규칙 번호가 아니라 심각도로 착각한다.
+    return sorted(alerts, key=lambda a: (_natural(a.rule), _natural(a.subject)))
 
 
 def threshold(cfg, key) -> int:
@@ -136,12 +162,13 @@ def ignore_reason(paths) -> str | None:
 
 
 # ---------------------------------------------------------------------------
-# W1~W3 — (프로젝트, 버전) 단위 집계
+# W1~W3 · W10 — (프로젝트, 버전) 단위 집계
 # ---------------------------------------------------------------------------
 
 def _release_alerts(rows, releases, today, cfg) -> list[Alert]:
     soon = threshold(cfg, "deploy_soon_days")
     stale = threshold(cfg, "deploy_stale_days")
+    qa_soon = threshold(cfg, "qa_soon_days")
     groups: dict[tuple, list[_Row]] = {}
     for row in rows:
         # 표에 없는 fixVersion 은 건너뛴다. 일정을 모르는 것은 경보가 아니다.
@@ -181,12 +208,22 @@ def _release_alerts(rows, releases, today, cfg) -> list[Alert]:
         # 안 지났고 QA 는 시작됐을 수 있으므로 두 사실이 겹치지 않는다.
         if release.qa_start and developing and not overdue:
             days = (today - release.qa_start).days
-            if days >= 0:
-                phrase = "오늘" if days == 0 else f"{days}일 경과"
+            if days > 0:
                 alerts.append(_release_alert(
                     "W3", subject, label,
-                    f"QA 시작 {release.qa_start:%m-%d} {phrase}",
+                    f"QA 시작 {release.qa_start:%m-%d} {days}일 경과",
                     "개발 단계", developing, days, RED,
+                ))
+            elif -days <= qa_soon:
+                # W3 와 상호배타다 — 경계는 `qa_start < today`. QA 가 오늘
+                # 시작하는 것은 "경과" 가 아니라 "임박" 이고, 두 규칙이 같은 날
+                # 같은 티켓으로 두 줄을 내면 릴리즈 하나가 🔴 두 개가 된다.
+                # W1 이 뜬 릴리즈에서는 아예 만들지 않는다 (`overdue`) — 배포일이
+                # 지났다는 사실이 QA 임박을 이미 포함한다.
+                alerts.append(_release_alert(
+                    "W10", subject, label,
+                    f"QA 시작 D-{-days} ({release.qa_start:%m-%d})",
+                    "미완료", developing, -days, RED,
                 ))
     return alerts
 
@@ -290,6 +327,104 @@ def _ticket_alert(rule, key, level, body, days) -> Alert:
 
 
 # ---------------------------------------------------------------------------
+# W9 — PR 단위. 한 PR 에 한 줄
+# ---------------------------------------------------------------------------
+
+def _pr_alerts(prs, today, cfg) -> list[Alert]:
+    stale = threshold(cfg, "pr_stale_days")
+    abandon = threshold(cfg, "pr_abandon_days")
+    alerts = []
+    for pull in prs or []:
+        alert = _pr_alert(pull, today, stale, abandon)
+        if alert is not None:
+            alerts.append(alert)
+    return alerts
+
+
+def _pr_alert(pull, today, stale, abandon) -> Alert | None:
+    """가장 심각한 하위 규칙 하나. 🔴 > 🟡 이고, 같은 등급이면 b > c > a > d.
+
+    네 줄을 내면 PR 하나가 브리핑의 네 자리를 먹는다. 충돌한 PR 에 "티켓 키가
+    없다"고 덧붙이는 것은 오늘 할 일을 늘리지 않는다.
+    """
+    created = getattr(pull, "created", None)
+    number = getattr(pull, "number", None)
+    if not isinstance(created, date) or not isinstance(number, int):
+        return None  # 날짜나 번호를 모르면 산수도 dedup 도 안 된다
+    if getattr(pull, "draft", False):
+        return None  # 드래프트는 아직 리뷰를 요청하지 않은 것이다
+
+    age = (today - created).days
+    if age > abandon:
+        # 등급 강하가 아니라 완전 제외다. 449일짜리는 추적해도 오늘 할 일이
+        # 생기지 않고, 🔴 는 접히지 않아서 매일 첫 줄을 먹는다.
+        return None
+
+    subject = str(getattr(pull, "subject", "") or f"{_pr_text(pull, 'repo')}#{number}")
+    title = _short(_pr_text(pull, "title"))
+
+    if _pr_text(pull, "mergeable").upper() == CONFLICTING:
+        return _pr_line("W9b", subject, RED, f"충돌 · 열린 지 {age}일", title, age)
+
+    asked = _unaddressed_request(pull)
+    if asked is not None:
+        return _pr_line(
+            "W9c", subject, YELLOW,
+            f"변경요청 방치 · {asked:%m-%d} 이후 커밋 없음", title, age,
+        )
+
+    if age >= stale:
+        return _pr_line("W9a", subject, YELLOW, f"리뷰 정체 {age}일", title, age)
+
+    if not _has_ticket_key(pull):
+        return _pr_line(
+            "W9d", subject, YELLOW, f"티켓 키 없음 · 열린 지 {age}일", title, age,
+        )
+    return None
+
+
+def _unaddressed_request(pull) -> date | None:
+    """변경요청 날짜. 그 뒤로 커밋이 있으면(또는 날짜를 모르면) None.
+
+    `reviewDecision` 은 새 커밋이 올라와도 `CHANGES_REQUESTED` 로 남는다 —
+    상태만 보면 이미 대응한 PR 까지 방치로 잡는다. 그래서 변경요청 날짜와
+    마지막 커밋 날짜를 견주고, **둘 중 하나라도 모르면 판정하지 않는다.**
+    없는 데이터로 만든 경보는 한 번 틀리면 규칙 전체를 못 믿게 만든다.
+    """
+    if _pr_text(pull, "review").upper() != CHANGES_REQUESTED:
+        return None
+    commit = getattr(pull, "last_commit", None)
+    asked = getattr(pull, "review_at", None)
+    if not isinstance(commit, date) or not isinstance(asked, date):
+        return None
+    # 같은 날이면 순서를 모른다. 날짜까지만 아는 값으로 "대응했다"고 단정하지
+    # 않고 사람에게 넘긴다.
+    return asked if commit <= asked else None
+
+
+def _has_ticket_key(pull) -> bool:
+    haystack = f"{_pr_text(pull, 'title')} {_pr_text(pull, 'branch')}"
+    return bool(TICKET_KEY_RE.search(haystack))
+
+
+def _pr_line(rule, subject, level, body, title, age) -> Alert:
+    tail = f" · {title}" if title else ""
+    text = f"{EMOJI[level]} {rule} [{subject}] {body}{tail}"
+    # 티켓 목록은 비운다. PR 경보의 주체는 티켓이 아니라 PR 이다.
+    return Alert(rule, subject, level, text, age, ())
+
+
+def _pr_text(pull, key) -> str:
+    value = getattr(pull, key, "")
+    return "" if value is None else str(value).strip()
+
+
+def _short(text) -> str:
+    text = " ".join(str(text or "").split())
+    return text if len(text) <= TITLE_LIMIT else text[:TITLE_LIMIT - 1] + "…"
+
+
+# ---------------------------------------------------------------------------
 # 반복 억제
 # ---------------------------------------------------------------------------
 
@@ -326,7 +461,7 @@ def fold_lines(alerts) -> list[str]:
     for alert in alerts or []:
         groups.setdefault(alert.rule, []).append(alert)
     lines = []
-    for rule in sorted(groups):
+    for rule in sorted(groups, key=_natural):
         members = groups[rule]
         subjects = sorted({a.subject for a in members}, key=_natural)
         emoji = EMOJI.get(members[0].level, "")

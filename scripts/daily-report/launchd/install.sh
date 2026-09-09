@@ -2,12 +2,17 @@
 # launchd 잡 2개를 설치한다. 실행 전 poll.py 가 --dry-run 으로 검증된 뒤에만 돌려라.
 set -euo pipefail
 PLUGIN_ROOT="$HOME/.claude/plugins/marketplaces/snowman95-marketplace"
+# 실행본은 자동갱신 밖에 둔다. 재클론이 나도 launchd 가 가리키는 코드는 살아 있어야 한다.
+RUNTIME="$HOME/.local/share/daily-report"
 SRC="$PLUGIN_ROOT/scripts/daily-report/launchd"
 DEST="$HOME/Library/LaunchAgents"
 mkdir -p "$DEST" "$HOME/.local/log/daily-report"
 
+# 정본(리포) → 실행본 동기화를 먼저. 안 하면 launchd 가 낡은 코드를 가리킨다.
+bash "$PLUGIN_ROOT/scripts/daily-report/sync.sh"
+
 for label in com.daily-report.daily-poll com.daily-report.daily-brief; do
-  sed -e "s|PLUGIN_ROOT|$PLUGIN_ROOT|g" -e "s|HOME_DIR|$HOME|g" \
+  sed -e "s|PLUGIN_ROOT/scripts/daily-report|$RUNTIME|g" -e "s|PLUGIN_ROOT|$PLUGIN_ROOT|g" -e "s|HOME_DIR|$HOME|g" \
       "$SRC/$label.plist" > "$DEST/$label.plist"
   launchctl unload "$DEST/$label.plist" 2>/dev/null || true
   launchctl load "$DEST/$label.plist"

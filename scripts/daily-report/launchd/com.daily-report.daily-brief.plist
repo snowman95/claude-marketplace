@@ -17,6 +17,11 @@
     <dict><key>Minute</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Weekday</key><integer>4</integer></dict>
     <dict><key>Minute</key><integer>3</integer><key>Hour</key><integer>8</integer><key>Weekday</key><integer>5</integer></dict>
   </array>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:HOME_DIR/.local/bin</string>
+  </dict>
   <key>StandardOutPath</key><string>HOME_DIR/.local/log/daily-report/brief.log</string>
   <key>StandardErrorPath</key><string>HOME_DIR/.local/log/daily-report/brief.err</string>
   <key>RunAtLoad</key><false/>

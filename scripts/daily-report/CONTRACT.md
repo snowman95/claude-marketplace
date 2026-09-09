@@ -221,15 +221,41 @@ stdout에 사람이 읽을 요약. 토큰·비밀값을 절대 찍지 마라.
 **실행본은 이제 `~/.local/share/daily-report/` 에 있고, 이 리포가 정본이다.**
 `sync.sh` 로 정본 → 실행본 동기화. `config.toml` 은 `~/.config/atlassian/daily-report.toml`.
 
+> **`sync.sh` 는 `rsync -a --delete` 다.** 실행본에만 있는 작업을 지운다.
+> 실행본에서 먼저 고쳤다면 **역방향 복사를 끝낸 뒤에** 돌려라. 한 번 이 순서를
+> 어겨서 W9·W10 작업 전체가 날아갔다(867 → 722).
+
 ### releases.py
 `{vault}/daily/releases.md` 마크다운 표 파서. **읽기 전용 — 사람이 관리하는 파일이다.**
 `Release(project, version, qa_start, prod_deploy, note, released)`.
 `released` 는 `note` 에서 파생되며 생성 인자로 넘길 수 없다.
 
 ### watch.py
-W1~W8 감시. `Alert(rule, subject, level, text, days, tickets)`.
-`subject` 가 dedup 키 — 티켓 규칙은 티켓 키, 릴리즈 규칙은 `"shop3.2.0"`.
+W1~W10 감시. `Alert(rule, subject, level, text, days, tickets)`.
+`subject` 가 dedup 키 — 티켓 규칙은 티켓 키, 릴리즈 규칙은 `"shop3.2.0"`, PR 규칙은 `"owner/repo#123"`.
 해소 마커는 **`✅`**. `→` 를 쓰면 이벤트 본문(`v26 → v44`)과 충돌해 W4 가 영원히 0건이 된다.
+`evaluate(tickets, releases, today, cfg, mds, prs=())` — `prs` 는 기본값이 있다(PR 없이도 돈다).
+
+W9(PR 적체)는 하위 규칙 4개이고 **한 PR 에 한 줄만** 낸다 (🔴 > 🟡, 같은 등급이면 b > c > a > d):
+`W9b` 충돌(🔴) · `W9c` 변경요청 방치(🟡) · `W9a` 정체(🟡) · `W9d` 티켓 키 없음(🟡).
+`pr_abandon_days`(기본 100)를 넘긴 PR 은 **등급 강하가 아니라 완전 제외** — 충돌이어도 나오지 않는다.
+
+W10(QA 시작 임박, 🔴)은 W3(QA 시작 경과)와 **상호배타**다. 경계는 `qa_start < today` —
+QA 가 오늘 시작하면 W10 이고, 어제 시작했으면 W3 다. W1 이 뜬 릴리즈에서는 만들지 않는다.
+
+규칙 정렬은 `_natural(rule)` 자연순이다. 문자열 정렬이면 `W10` 이 `W2` 앞에 온다.
+
+### github.py
+`gh` CLI 로 내 열린 PR 을 읽는다. **새 토큰을 만들지 않는다.**
+`PullRequest(repo, number, title, branch, created, draft, mergeable, review, last_commit, review_at)`.
+`repo_slug(path)` 는 로컬 리포의 `origin` 에서 `"owner/name"` 을 뽑는다 — 슬러그용 설정 키는 없다.
+**어떤 실패도 빈 리스트 + stderr 한 줄이다.** PR 조회가 죽어도 W1~W8 은 계산돼야 한다.
+`poll._pull_requests()` 가 이 호출을 **별도 try** 로 감싼다 — `_watch` 의 try 안에 넣으면
+예외 하나로 감시 계층 전체가 조용해진다.
+
+`--json` 에 **`commits`·`reviews` 를 넣지 마라.** `--limit 100` 과 곱해지면 GraphQL 노드
+한도(50만)를 넘어 **목록 전체가 실패한다**(실측). 두 필드는 `reviewDecision` 이
+`CHANGES_REQUESTED` 인 PR 에만 `gh pr view` 로 따로 묻는다.
 
 ### heartbeat.py
 자기감시. `brief_missing` / `brief_partial` / `brief_unsent` 3단계.

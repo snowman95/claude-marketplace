@@ -8,10 +8,12 @@
 """
 
 import json
+from datetime import date, timedelta
 
 import pytest
 
 import poll
+from github import PullRequest
 
 FRIDAY = "2026-09-04"
 SATURDAY = "2026-09-05"
@@ -72,6 +74,29 @@ class FakeConfluence:
         return {}
 
 
+class FakeGithub:
+    """`gh` 를 부르지 않는 대역. 폴링이 넘긴 슬러그를 기록한다."""
+
+    def __init__(self):
+        self.slugs = None
+        self.today = None
+        self.prs = []
+        self.error = None
+        self.remotes = {}
+        self.asked = []
+
+    def list_open_prs(self, slugs, today):
+        self.slugs = list(slugs)
+        self.today = today
+        if self.error is not None:
+            raise self.error
+        return list(self.prs)
+
+    def repo_slug(self, path):
+        self.asked.append(str(path))
+        return self.remotes.get(str(path))
+
+
 class Rig:
     def __init__(self, tmp_path, monkeypatch):
         self.vault = tmp_path / "projects"
@@ -91,7 +116,11 @@ class Rig:
             "repos = []",
         ]
 
+        self.github = FakeGithub()
+
         monkeypatch.setattr(poll, "JiraClient", self.jira)
+        monkeypatch.setattr(poll.github_mod, "list_open_prs", self.github.list_open_prs)
+        monkeypatch.setattr(poll.github_mod, "repo_slug", self.github.repo_slug)
         monkeypatch.setattr(poll, "ConfluenceClient", FakeConfluence())
         monkeypatch.setattr(poll, "load_token", lambda email: "atl-token")
         monkeypatch.setattr(poll, "load_figma_token", lambda: None)
@@ -122,6 +151,13 @@ class Rig:
             )
             for i in range(count)
         ]
+
+    def with_repos(self, *paths):
+        self.config_lines = [
+            line for line in self.config_lines if not line.startswith("repos =")
+        ]
+        joined = ", ".join(f'"{path}"' for path in paths)
+        self.config_lines.append(f"repos = [{joined}]")
 
     # --- 실행 -------------------------------------------------------------
     @property
@@ -451,3 +487,153 @@ def test_watch_failure_does_not_count_as_an_api_error(rig, monkeypatch, capsys):
 
     assert rig.state()["consecutive_errors"] == 0
     assert "감시 평가 실패" in capsys.readouterr().err
+
+
+# ---------------------------------------------------------------------------
+# PR 조회 배선 (W9)
+# ---------------------------------------------------------------------------
+
+def pull_request(number=101, repo="weverse/web_weverseshop", age=35, **over):
+    fields = {
+        "repo": repo,
+        "number": number,
+        "title": "CWEB-1547 쿠폰 할인 표시",
+        "branch": "features/CWEB-1547",
+        "created": date(2026, 9, 4) - timedelta(days=age),
+        "draft": False,
+        "mergeable": "MERGEABLE",
+        "review": "REVIEW_REQUIRED",
+        "last_commit": None,
+    }
+    fields.update(over)
+    return PullRequest(**fields)
+
+
+def test_pull_requests_reach_the_watch_layer(rig, capsys):
+    """조회가 배선되지 않으면 W9 는 코드에만 있고 브리핑에는 없다."""
+    rig.jira.active = [issue("CWEB-1547")]
+    rig.github.prs = [pull_request()]
+
+    assert rig.run() == 0
+
+    w9 = [line for line in capsys.readouterr().out.splitlines() if "W9" in line]
+    assert len(w9) == 1
+    assert "[weverse/web_weverseshop#101]" in w9[0]
+    assert "35일" in w9[0]
+
+
+def test_pr_alerts_are_recorded_in_the_watch_state(rig):
+    rig.jira.active = [issue("CWEB-1547")]
+    rig.github.prs = [pull_request()]
+
+    rig.run()
+
+    assert rig.state()["watch"]["weverse/web_weverseshop#101"] == {"W9a": FRIDAY}
+
+
+def test_pr_query_gets_the_polling_date(rig):
+    rig.jira.active = [issue("CWEB-1547")]
+    rig.run()
+    assert rig.github.today == date(2026, 9, 4)
+
+
+def test_slugs_come_from_the_configured_repos(rig):
+    """설정 키를 새로 만들지 않는다 — `repos` 에서 origin 을 읽어 유도한다."""
+    rig.with_repos("/repos/shop", "/repos/admin")
+    rig.github.remotes = {
+        "/repos/shop": "weverse/web_weverseshop",
+        "/repos/admin": "weverse/admin",
+    }
+    rig.jira.active = [issue("CWEB-1547")]
+
+    rig.run()
+
+    assert rig.github.slugs == ["weverse/web_weverseshop", "weverse/admin"]
+
+
+def test_repos_without_an_origin_are_skipped(rig):
+    rig.with_repos("/repos/shop", "/repos/local-only")
+    rig.github.remotes = {"/repos/shop": "weverse/web_weverseshop"}
+    rig.jira.active = [issue("CWEB-1547")]
+
+    rig.run()
+
+    assert rig.github.slugs == ["weverse/web_weverseshop"]
+
+
+def test_duplicate_slugs_are_queried_once(rig):
+    """워크트리 두 개가 같은 origin 을 가리킨다. 같은 PR 을 두 줄로 내지 않는다."""
+    rig.with_repos("/repos/shop", "/repos/shop-worktree")
+    rig.github.remotes = {
+        "/repos/shop": "weverse/web_weverseshop",
+        "/repos/shop-worktree": "weverse/web_weverseshop",
+    }
+    rig.jira.active = [issue("CWEB-1547")]
+
+    rig.run()
+
+    assert rig.github.slugs == ["weverse/web_weverseshop"]
+
+
+def test_no_repos_means_no_slugs(rig):
+    rig.jira.active = [issue("CWEB-1547")]
+    rig.run()
+    assert rig.github.slugs == []
+    assert rig.github.asked == []
+
+
+def test_a_pr_query_failure_does_not_stop_polling(rig, capsys):
+    """PR 조회 실패로 감시 8개가 같이 죽으면 남은 것이 없다."""
+    rig.releases()
+    rig.jira.active = [issue("CWEB-1547", updated=STALE, fix_versions=("shop3.2.0",))]
+    rig.github.error = RuntimeError("gh 가 사라졌다")
+
+    assert rig.run() == 0
+
+    captured = capsys.readouterr()
+    assert set(rig.state()["tickets"]) == {"CWEB-1547"}
+    assert rig.state()["consecutive_errors"] == 0
+    assert "W1" in captured.out
+    assert "PR 조회 실패" in captured.err
+
+
+def test_pr_alerts_fold_on_the_second_run(rig, capsys):
+    """🟡 는 이미 아는 것이 되면 접힌다. PR 도 예외가 아니다."""
+    rig.jira.active = [issue("CWEB-1547")]
+    rig.github.prs = [pull_request()]
+
+    rig.run()
+    capsys.readouterr()
+    rig.run()
+
+    lines = [line for line in capsys.readouterr().out.splitlines() if "W9a" in line]
+    assert len(lines) == 1
+    assert "계속 1건" in lines[0]
+
+
+def test_a_conflicting_pr_stays_visible(rig, capsys):
+    rig.jira.active = [issue("CWEB-1547")]
+    rig.github.prs = [pull_request(age=2, mergeable="CONFLICTING")]
+
+    rig.run()
+    capsys.readouterr()
+    rig.run()
+
+    lines = [line for line in capsys.readouterr().out.splitlines() if "W9b" in line]
+    assert len(lines) == 1
+    assert "계속" not in lines[0]
+    assert "🔴" in lines[0]
+
+
+def test_an_abandoned_pr_never_shows_up(rig, capsys):
+    """실측의 449·384일 PR. 진행 중단된 것은 감시 대상이 아니다."""
+    rig.jira.active = [issue("CWEB-1547")]
+    rig.github.prs = [
+        pull_request(number=2974, age=384),
+        pull_request(number=1025, age=449, mergeable="CONFLICTING"),
+    ]
+
+    rig.run()
+
+    assert "W9" not in capsys.readouterr().out
+    assert rig.state()["watch"] == {}
