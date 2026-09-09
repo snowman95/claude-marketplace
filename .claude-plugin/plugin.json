@@ -13,6 +13,8 @@
     "./skills/workflow/ticket-links",
     "./skills/workflow/ticket-advance",
     "./skills/workflow/daily-brief",
+    "./skills/workflow/weekly-review",
+    "./skills/workflow/decision-apply",
     "./skills/productivity/render-html",
     "./skills/productivity/worktree",
     "./skills/productivity/md-to-slides",
