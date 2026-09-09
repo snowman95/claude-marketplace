@@ -4,8 +4,8 @@
 
 | 레포 | fixVersion이 **3.0.0** | 그 외 |
 |------|-------------------------|-------|
-| **web_weverseshop** | `features/api-order-renewal` | `develop` |
-| **web_weverseshop_admin** | `api/order-renewal-2` | `develop` |
+| **myproject** | `features/api-order-renewal` | `develop` |
+| **myproject_admin** | `api/order-renewal-2` | `develop` |
 
 ## 브랜치 이름
 

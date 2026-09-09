@@ -10,7 +10,7 @@ jira_status: "미해결"
 blocked: false
 pulled_at: YYYY-MM-DD
 doc_updated_at: YYYY-MM-DDTHH:mm:ss+09:00
-url: https://bighitcorp.atlassian.net/browse/WPQ-16135
+url: https://your-site.atlassian.net/browse/WPQ-16135
 ---
 
 # {summary}

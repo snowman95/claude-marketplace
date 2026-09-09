@@ -176,7 +176,7 @@ Slack 봇은 `chat:write`·`im:write` 뿐이라 **발신 전용**이고 스레�
 ## 로컬 문서
 
 ```
-<obsidian://open?vault=projects&file=web_weverseshop/tasks/shop3.3.0/CWEB-1547|CWEB-1547.md>
+<obsidian://open?vault=projects&file=myproject/tasks/shop3.3.0/CWEB-1547|CWEB-1547.md>
 ```
 
 - vault 이름은 `projects` 고정

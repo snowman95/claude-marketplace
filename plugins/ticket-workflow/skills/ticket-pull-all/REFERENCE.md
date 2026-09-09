@@ -24,5 +24,5 @@ project = WPQ AND fixVersion = "3.0.0" ORDER BY key ASC
 ## vault·레포 라우팅
 
 ticket-pull과 동일.  
-Summary 접두로 shop(`web_weverseshop`) vs admin(`web_weverseshop_admin`) 결정.  
+Summary 접두로 shop(`myproject`) vs admin(`myproject_admin`) 결정.  
 `jh.han`: vault 루트 `~/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects/` 아래 프로젝트 폴더만 사용.

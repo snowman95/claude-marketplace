@@ -68,7 +68,7 @@ disable-model-invocation: true
 **대체된 항목은 삭제하지 않는다** — 왜 뒤집혔는지가 다음 사람에게 필요한 정보다.
 
 형식은 **실제 예시를 따라라**:
-`~/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects/web_weverseshop/tasks/shop3.3.0/CWEB-1547.md` 의 **D-01**.
+`~/Library/Mobile Documents/com~apple~CloudDocs/Documents/projects/myproject/tasks/shop3.3.0/CWEB-1547.md` 의 **D-01**.
 
 골격은 이렇다.
 
