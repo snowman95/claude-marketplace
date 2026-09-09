@@ -161,6 +161,9 @@ class Rig:
         monkeypatch.setattr(
             poll.subprocess, "run", lambda *a, **k: self.notifications.append(a[0])
         )
+        # 자기감시는 tmp vault 에 오늘자 daily 가 없으니 항상 울린다. 여기서는
+        # 그 알림이 관심사가 아니다 — 배선·판정은 test_heartbeat.py 가 본다.
+        monkeypatch.setattr(poll, "_heartbeat", lambda cfg, data, now: ([], []))
 
     # --- vault 조립 -------------------------------------------------------
     def md(self, repo, key, frontmatter=None, links=None):
@@ -239,17 +242,35 @@ FIGMA_LINKS = [
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("day", [SATURDAY, SUNDAY])
-def test_weekend_does_nothing(rig, day, capsys):
+def test_weekend_still_polls(rig, day, capsys):
+    """주말에도 끝까지 돈다 — 여기서 빠지면 주간 회고 미발행을 영원히 못 잡는다.
+
+    억제되는 것은 티켓 이벤트로 인한 Slack 스레드 답글뿐이다
+    (test_weekend_suppresses_thread_replies).
+    """
     rig.standard_vault()
     before = rig.p1547.read_bytes()
 
     assert rig.run(date=day) == 0
 
-    assert rig.jira.constructed == 0
-    assert not rig.state_path.exists()
-    assert not rig.pending_path.exists()
-    assert rig.p1547.read_bytes() == before
-    assert "주말" in capsys.readouterr().out
+    assert rig.jira.constructed == 1
+    assert rig.state_path.exists()
+    assert rig.pending()  # 감시·기록은 주말에도 남는다
+    assert rig.p1547.read_bytes() != before
+    assert "주말 — 이벤트 알림 억제" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize("day", [SATURDAY, SUNDAY])
+def test_weekend_suppresses_thread_replies(rig, notifier, day):
+    """주말에 티켓 알림이 울리는 게 원래 피하려던 것이다."""
+    rig.standard_vault()
+    seed_state(rig, slack={"date": day, "ts": BRIEFING_TS})
+    rig.jira.status("CWEB-1547", "리뷰중")
+
+    assert rig.run(date=day) == 0
+
+    assert notifier.sent == []
+    assert [e["kind"] for e in rig.pending()] == ["status"]  # 기록은 남는다
 
 
 # ---------------------------------------------------------------------------

@@ -44,6 +44,10 @@ class Config:
     qa_lookback_days: int
     repos: list[Path]
     notify: dict = field(default_factory=dict)
+    watch: dict = field(default_factory=dict)
+    heartbeat: dict = field(default_factory=dict)
+    weekly: dict = field(default_factory=dict)
+    decisions: dict = field(default_factory=dict)
 
     @property
     def daily_dir(self) -> Path:
@@ -104,6 +108,10 @@ def load_config(path: Path | None = None) -> Config:
         qa_lookback_days=int(raw.get("qa_lookback_days", 7)),
         repos=[_path(r) for r in raw.get("repos", [])],
         notify=_notify(raw),
+        watch=dict(raw.get("watch") or {}),
+        heartbeat=dict(raw.get("heartbeat") or {}),
+        weekly=dict(raw.get("weekly") or {}),
+        decisions=dict(raw.get("decisions") or {}),
     )
 
 

@@ -348,3 +348,24 @@ def test_example_config_has_no_personal_values():
     for leaked in (cfg.site, cfg.email, cfg.notify.get("slack_target")):
         if leaked:
             assert str(leaked) not in text
+
+
+def test_weekly_table_is_passed_through(tmp_path, monkeypatch):
+    path = tmp_path / "c.toml"
+    path.write_text(
+        'vault = "/tmp/v"\nsite = "s"\nemail = "e"\n'
+        'parked_statuses = []\nqa_projects = []\nqa_lookback_days = 7\nrepos = []\n'
+        '[weekly]\nday = "sun"\n',
+        encoding="utf-8",
+    )
+    assert cfgmod.load_config(path).weekly == {"day": "sun"}
+
+
+def test_weekly_defaults_to_empty(tmp_path):
+    path = tmp_path / "c.toml"
+    path.write_text(
+        'vault = "/tmp/v"\nsite = "s"\nemail = "e"\n'
+        'parked_statuses = []\nqa_projects = []\nqa_lookback_days = 7\nrepos = []\n',
+        encoding="utf-8",
+    )
+    assert cfgmod.load_config(path).weekly == {}

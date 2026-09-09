@@ -159,7 +159,10 @@ python3 poll.py [--dry-run] [--config PATH] [--date YYYY-MM-DD]
 
 ### 흐름
 
-1. **주말이면 즉시 exit 0** (`datetime.now(KST).weekday() >= 5`). 로그 한 줄만 남긴다.
+1. **주말에도 끝까지 돈다.** 주말(`weekday() >= 5`)이면 `주말 — 이벤트 알림 억제` 를 한 줄 남기고,
+   티켓 이벤트로 인한 **Slack 스레드 답글만 억제**한다. 감시·자기감시·state 갱신은 그대로 수행하고
+   🔴 등급 알림(자기감시·연속 실패)은 주말에도 보낸다. (예전엔 즉시 exit 0 이라 주간 회고 미발행이
+   프로덕션에서 한 번도 발송되지 않았다.) `--force` 는 하위 호환용 no-op 이다.
 2. config·토큰 로드. `_state.json` 로드.
 3. JQL 2회 — 활성 / parked.
    ```
@@ -208,3 +211,32 @@ stdout에 사람이 읽을 요약. 토큰·비밀값을 절대 찍지 마라.
   WV2Q-53784 추적 시작 접수
   md 없음: CWEB-1549, CWEB-1550, WV2Q-53784
 ```
+
+
+---
+
+## 재클론으로 소실됐던 모듈 (2026-09-09 복구)
+
+플러그인 자동갱신이 마켓플레이스를 재클론하면서 미푸시 작업이 날아갔다.
+**실행본은 이제 `~/.local/share/daily-report/` 에 있고, 이 리포가 정본이다.**
+`sync.sh` 로 정본 → 실행본 동기화. `config.toml` 은 `~/.config/atlassian/daily-report.toml`.
+
+### releases.py
+`{vault}/daily/releases.md` 마크다운 표 파서. **읽기 전용 — 사람이 관리하는 파일이다.**
+`Release(project, version, qa_start, prod_deploy, note, released)`.
+`released` 는 `note` 에서 파생되며 생성 인자로 넘길 수 없다.
+
+### watch.py
+W1~W8 감시. `Alert(rule, subject, level, text, days, tickets)`.
+`subject` 가 dedup 키 — 티켓 규칙은 티켓 키, 릴리즈 규칙은 `"shop3.2.0"`.
+해소 마커는 **`✅`**. `→` 를 쓰면 이벤트 본문(`v26 → v44`)과 충돌해 W4 가 영원히 0건이 된다.
+
+### heartbeat.py
+자기감시. `brief_missing` / `brief_partial` / `brief_unsent` 3단계.
+**살아 있는 쪽(폴링)이 죽은 쪽(브리핑)을 감시한다** — 폴링은 Atlassian 토큰만 쓰므로 클로드 인증과 무관하게 돈다.
+알림은 `MultiNotifier([slack, osascript])` 로 2차 채널까지. Slack 하나에 의존하면 봇 토큰이 죽을 때 경고도 사라진다.
+
+### decisions.py
+브리핑 `### 결정` 의 `↳ 답:` 파서. **Slack 봇은 발신 전용이라 이 파일이 유일한 회신 경로다.**
+`answer_hash`(원문) 와 `answer_key`(마커·공백 무시) 둘 중 하나만 맞아도 처리된 것으로 본다 —
+`decision-apply` 가 붙이는 `✅ D-NN 기록` 마커 때문에 원문 해시가 바뀌어 한 바퀴 헛도는 것을 막는다.

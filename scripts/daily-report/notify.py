@@ -135,6 +135,49 @@ class OsascriptNotifier(Notifier):
         return False
 
 
+class MultiNotifier(Notifier):
+    """여러 채널로 같은 메시지를 겹쳐 보낸다.
+
+    자기감시 알림이 Slack 하나에만 실려 있으면, 봇 토큰이 만료되는 순간 경고가
+    조용히 사라진다 — 이 시스템이 애초에 잡으려던 실패 클래스와 똑같다. 그래서
+    **하나가 실패해도 나머지를 계속** 보낸다.
+    """
+
+    def __init__(self, notifiers):
+        self._notifiers = [n for n in (notifiers or []) if n is not None]
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({self._notifiers!r})"
+
+    @property
+    def notifiers(self) -> list:
+        return list(self._notifiers)
+
+    def send(self, text: str, thread_ts: str | None = None) -> str | None:
+        """전부에게 보내고 **첫 성공의 ts** 를 돌려준다. 아무도 못 주면 None."""
+        first = None
+        for notifier in self._notifiers:
+            try:
+                ts = notifier.send(text, thread_ts=thread_ts)
+            except Exception as exc:  # 한 채널이 터져도 다음 채널로 계속 간다
+                _warn(f"multi send: {_safe(exc)}")
+                continue
+            if first is None and ts:
+                first = str(ts)
+        return first
+
+    def update(self, ts: str, text: str) -> bool:
+        """하나라도 고쳤으면 True."""
+        updated = False
+        for notifier in self._notifiers:
+            try:
+                if notifier.update(ts, text):
+                    updated = True
+            except Exception as exc:
+                _warn(f"multi update: {_safe(exc)}")
+        return updated
+
+
 class NullNotifier(Notifier):
     """알림 끔. 아무것도 하지 않고 아무것도 출력하지 않는다."""
 

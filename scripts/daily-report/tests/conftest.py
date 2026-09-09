@@ -1,6 +1,7 @@
-"""Shared test helpers: sys.path wiring and a fake urlopen."""
+"""Shared test helpers: sys.path wiring, a fake urlopen, and a spawn guard."""
 import io
 import json
+import subprocess
 import sys
 import urllib.error
 import urllib.parse
@@ -78,3 +79,43 @@ def http(monkeypatch):
     fake = FakeHTTP()
     monkeypatch.setattr(urllib.request, "urlopen", fake)
     return fake
+
+
+# ---------------------------------------------------------------------------
+# spawn 차단
+# ---------------------------------------------------------------------------
+
+class FakeProcess:
+    def __init__(self, pid):
+        self.pid = pid
+
+
+class SpawnRecorder:
+    """`subprocess.Popen` 자리에 꽂는다. 기록만 하고 아무것도 띄우지 않는다."""
+
+    def __init__(self):
+        self.calls = []
+        self.pid = 4242
+        self.error = None
+
+    def __call__(self, argv, **kwargs):
+        self.calls.append({"argv": list(argv), "kwargs": kwargs})
+        if self.error is not None:
+            raise self.error
+        return FakeProcess(self.pid)
+
+    @property
+    def argvs(self):
+        return [call["argv"] for call in self.calls]
+
+
+@pytest.fixture(autouse=True)
+def spawns(monkeypatch):
+    """**실제 프로세스를 띄우지 않는다.**
+
+    폴링의 결정 자동 처리는 기본 켜짐이라, 픽스처가 없으면 테스트가 실제
+    `claude -p` 를 띄울 수 있다. autouse 로 전 테스트에 깔아 그 경로를 막는다.
+    """
+    recorder = SpawnRecorder()
+    monkeypatch.setattr(subprocess, "Popen", recorder)
+    return recorder

@@ -8,6 +8,7 @@ import pytest
 import config
 import notify
 from notify import (
+    MultiNotifier,
     NullNotifier,
     Notifier,
     OsascriptNotifier,
@@ -297,6 +298,127 @@ def test_null_notifier_is_quiet(capsys):
     assert err == ""
 
 
+# --- MultiNotifier --------------------------------------------------------
+
+
+class Recorder(Notifier):
+    """보낸 것을 기록하는 가짜 채널. ts·update 결과·예외를 지정한다."""
+
+    def __init__(self, ts=None, updated=False, boom=None):
+        self.sent = []
+        self.updates = []
+        self._ts = ts
+        self._updated = updated
+        self._boom = boom
+
+    def send(self, text, thread_ts=None):
+        self.sent.append((text, thread_ts))
+        if self._boom:
+            raise self._boom
+        return self._ts
+
+    def update(self, ts, text):
+        self.updates.append((ts, text))
+        if self._boom:
+            raise self._boom
+        return self._updated
+
+
+def test_multi_sends_to_every_channel():
+    first, second = Recorder(ts="1.1"), Recorder(ts="2.2")
+
+    ts = MultiNotifier([first, second]).send("🔴 브리핑 미발행")
+
+    assert ts == "1.1"  # 첫 성공의 ts
+    assert first.sent == [("🔴 브리핑 미발행", None)]
+    assert second.sent == [("🔴 브리핑 미발행", None)]
+
+
+def test_multi_returns_the_ts_of_the_first_channel_that_worked():
+    first, second = Recorder(ts=None), Recorder(ts="2.2")
+
+    assert MultiNotifier([first, second]).send("본문") == "2.2"
+    assert first.sent  # 실패한 채널에도 시도는 했다
+
+
+def test_multi_returns_none_when_no_channel_yields_a_ts():
+    first, second = Recorder(ts=None), Recorder(ts=None)
+
+    assert MultiNotifier([first, second]).send("본문") is None
+    assert first.sent and second.sent
+
+
+def test_multi_keeps_going_when_a_channel_blows_up(capsys):
+    first = Recorder(boom=RuntimeError("slack down"))
+    second = Recorder(ts="2.2")
+
+    assert MultiNotifier([first, second]).send("본문") == "2.2"
+
+    assert second.sent  # 하나가 죽어도 나머지는 받는다
+    assert capsys.readouterr().err.strip()
+
+
+def test_multi_send_never_raises():
+    channels = [Recorder(boom=RuntimeError("a")), Recorder(boom=OSError("b"))]
+
+    assert MultiNotifier(channels).send("본문") is None
+
+
+def test_multi_passes_thread_ts_through():
+    first, second = Recorder(ts="1.1"), Recorder(ts="2.2")
+
+    MultiNotifier([first, second]).send("답글", thread_ts="9.9")
+
+    assert first.sent[0][1] == "9.9"
+    assert second.sent[0][1] == "9.9"
+
+
+def test_multi_update_is_true_when_any_channel_updates():
+    first, second = Recorder(updated=False), Recorder(updated=True)
+
+    assert MultiNotifier([first, second]).update("1.1", "고친 본문") is True
+    assert first.updates and second.updates
+
+
+def test_multi_update_is_false_when_every_channel_fails():
+    channels = [Recorder(updated=False), Recorder(updated=False)]
+
+    assert MultiNotifier(channels).update("1.1", "본문") is False
+
+
+def test_multi_update_survives_an_exception(capsys):
+    first = Recorder(boom=RuntimeError("slack down"))
+    second = Recorder(updated=True)
+
+    assert MultiNotifier([first, second]).update("1.1", "본문") is True
+    assert capsys.readouterr().err.strip()
+
+
+def test_multi_with_no_channels_is_quiet():
+    empty = MultiNotifier([])
+
+    assert empty.send("본문") is None
+    assert empty.update("1.1", "본문") is False
+
+
+def test_multi_drops_none_members():
+    only = Recorder(ts="1.1")
+
+    assert MultiNotifier([None, only, None]).send("본문") == "1.1"
+    assert MultiNotifier(None).send("본문") is None
+
+
+def test_multi_never_leaks_a_token_in_repr():
+    multi = MultiNotifier([SlackNotifier(TOKEN, TARGET), OsascriptNotifier()])
+
+    assert TOKEN not in repr(multi)
+    assert TARGET in repr(multi)
+
+
+def test_multi_is_a_notifier():
+    assert isinstance(MultiNotifier([]), Notifier)
+
+
 # --- Notifier 베이스 ------------------------------------------------------
 
 
@@ -356,7 +478,28 @@ def test_build_without_notify_section(no_env, monkeypatch):
     assert isinstance(build(Cfg()), NullNotifier)
 
 
-def test_build_with_config_lacking_notify_attribute(no_env):
+def test_build_with_config_lacking_notify_attribute(no_env, monkeypatch):
+    """`load_config()` 가 만든 진짜 Config — `[notify]` 가 없으면 알림을 끈다.
+
+    예전에는 인자 없이 `load_config()` 를 불렀지만, 설정 경로가
+    `~/.config/atlassian/daily-report.toml` 폴백을 갖게 된 뒤로는 개발자
+    머신의 실제 설정을 읽어 들어 `site` 유무에 따라 결과가 갈렸다. 테스트가
+    보려는 것은 채널 선택뿐이므로 설정을 tmp 로 고정한다.
+    """
+    cfg_path = no_env / "daily-report.toml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                f'vault = "{no_env}"',
+                'site = "example.atlassian.net"',
+                'email = "me@example.com"',
+            ]
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("DAILY_REPORT_CONFIG", str(cfg_path))
+
     assert isinstance(build(config.load_config()), NullNotifier)
 
 
